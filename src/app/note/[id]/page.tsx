@@ -3,12 +3,11 @@
 import { useSession } from "next-auth/react";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import SignatureCanvas from "react-signature-canvas";
 import Header from "@/components/Header";
 import AudioPanel from "@/components/AudioPanel";
 import SummaryPanel from "@/components/SummaryPanel";
 import TextEditor from "@/components/TextEditor";
-import DrawingCanvas from "@/components/DrawingCanvas";
+import DrawingCanvas, { DrawingCanvasHandle } from "@/components/DrawingCanvas";
 import { getNoteData, saveNote } from "@/app/actions";
 
 export default function NotePage() {
@@ -25,7 +24,9 @@ export default function NotePage() {
     const [activeTab, setActiveTab] = useState<"text" | "draw">("text");
     const [isSaving, setIsSaving] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
-    const canvasRef = useRef<SignatureCanvas | null>(null);
+    const canvasRef = useRef<DrawingCanvasHandle>(null);
+    // スケッチの読み込みを遅延するためのデータ保持
+    const pendingSketchRef = useRef<string | null>(null);
 
     // ノートデータを読み込み
     const loadNote = useCallback(async () => {
@@ -35,8 +36,16 @@ export default function NotePage() {
             setSummaryText(data.summary);
             setNoteText(data.note);
 
-            // フォルダ名取得のためにドライブ情報を利用
-            // ※ Server Action 内でフォルダ名を取得できないため、URLパラメータから推測
+            // スケッチ画像の復元
+            if (data.sketchBase64) {
+                if (canvasRef.current) {
+                    canvasRef.current.loadImage(data.sketchBase64);
+                } else {
+                    // キャンバスがまだマウントされていない場合は保持
+                    pendingSketchRef.current = data.sketchBase64;
+                }
+            }
+
             setNoteTitle("ノート");
         } catch (error) {
             console.error("読み込みエラー:", error);
@@ -50,6 +59,19 @@ export default function NotePage() {
             loadNote();
         }
     }, [session, loadNote]);
+
+    // タブ切り替え時に保留中のスケッチをロード
+    useEffect(() => {
+        if (activeTab === "draw" && pendingSketchRef.current && canvasRef.current) {
+            // 少し遅延してキャンバスが完全にマウントされるのを待つ
+            setTimeout(() => {
+                if (pendingSketchRef.current && canvasRef.current) {
+                    canvasRef.current.loadImage(pendingSketchRef.current);
+                    pendingSketchRef.current = null;
+                }
+            }, 100);
+        }
+    }, [activeTab]);
 
     // フォルダ名を取得
     useEffect(() => {
@@ -77,7 +99,7 @@ export default function NotePage() {
 
             // キャンバスデータの取得
             if (canvasRef.current && !canvasRef.current.isEmpty()) {
-                sketchBase64 = canvasRef.current.toDataURL("image/png");
+                sketchBase64 = canvasRef.current.toDataURL();
             }
 
             await saveNote(folderId, {
@@ -101,11 +123,6 @@ export default function NotePage() {
             setIsSaving(false);
         }
     };
-
-    // キャンバス参照コールバック
-    const handleCanvasRef = useCallback((ref: SignatureCanvas | null) => {
-        canvasRef.current = ref;
-    }, []);
 
     // 未ログイン
     if (status === "loading" || !session) {
@@ -215,7 +232,7 @@ export default function NotePage() {
                         {activeTab === "text" ? (
                             <TextEditor content={noteText} onChange={setNoteText} />
                         ) : (
-                            <DrawingCanvas onCanvasRef={handleCanvasRef} />
+                            <DrawingCanvas ref={canvasRef} />
                         )}
                     </div>
                 </div>

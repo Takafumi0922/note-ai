@@ -1,19 +1,32 @@
 "use client";
 
-import { useRef, useState, useEffect, useCallback } from "react";
-import SignatureCanvas from "react-signature-canvas";
+import { useRef, useState, useEffect, useCallback, useImperativeHandle, forwardRef } from "react";
 
-interface DrawingCanvasProps {
-    onCanvasRef: (ref: SignatureCanvas | null) => void;
+// 外部から呼び出せるメソッド
+export interface DrawingCanvasHandle {
+    toDataURL: () => string;
+    loadImage: (src: string) => void;
+    isEmpty: () => boolean;
+    clear: () => void;
 }
 
-export default function DrawingCanvas({ onCanvasRef }: DrawingCanvasProps) {
-    const canvasRef = useRef<SignatureCanvas | null>(null);
+interface Point {
+    x: number;
+    y: number;
+    pressure: number;
+}
+
+const DrawingCanvas = forwardRef<DrawingCanvasHandle>(function DrawingCanvas(_, ref) {
+    const canvasRef = useRef<HTMLCanvasElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const [penColor, setPenColor] = useState("#ffffff");
     const [penSize, setPenSize] = useState(2);
     const [isEraser, setIsEraser] = useState(false);
-    const [canvasSize, setCanvasSize] = useState({ width: 100, height: 100 });
+    const isDrawingRef = useRef(false);
+    const lastPointRef = useRef<Point | null>(null);
+    const prevPointRef = useRef<Point | null>(null);
+    const hasContentRef = useRef(false);
+    const bgColor = "#1a1f35";
 
     // カラーパレット
     const colors = [
@@ -26,16 +39,49 @@ export default function DrawingCanvas({ onCanvasRef }: DrawingCanvasProps) {
         "#ec4899",
     ];
 
-    // キャンバスサイズのリサイズ対応
-    const updateCanvasSize = useCallback(() => {
-        if (containerRef.current) {
-            const rect = containerRef.current.getBoundingClientRect();
-            setCanvasSize({
-                width: rect.width,
-                height: rect.height,
-            });
-        }
+    // キャンバスの背景を塗る
+    const fillBackground = useCallback((ctx: CanvasRenderingContext2D) => {
+        ctx.fillStyle = bgColor;
+        ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
     }, []);
+
+    // キャンバスサイズの更新
+    const updateCanvasSize = useCallback(() => {
+        const canvas = canvasRef.current;
+        const container = containerRef.current;
+        if (!canvas || !container) return;
+
+        const rect = container.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        const width = rect.width;
+        const height = rect.height;
+
+        // 既存の描画を保存
+        let imageData: ImageData | null = null;
+        const ctx = canvas.getContext("2d");
+        if (ctx && canvas.width > 0 && canvas.height > 0) {
+            try {
+                imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            } catch {
+                // 初回はエラーになることがある
+            }
+        }
+
+        // サイズを設定（高解像度ディスプレイ対応）
+        canvas.width = width * dpr;
+        canvas.height = height * dpr;
+        canvas.style.width = width + "px";
+        canvas.style.height = height + "px";
+
+        if (ctx) {
+            ctx.scale(dpr, dpr);
+            fillBackground(ctx);
+            // 既存の描画を復元
+            if (imageData) {
+                ctx.putImageData(imageData, 0, 0);
+            }
+        }
+    }, [fillBackground]);
 
     useEffect(() => {
         updateCanvasSize();
@@ -43,21 +89,138 @@ export default function DrawingCanvas({ onCanvasRef }: DrawingCanvasProps) {
         return () => window.removeEventListener("resize", updateCanvasSize);
     }, [updateCanvasSize]);
 
-    // キャンバス参照を親に渡す
-    useEffect(() => {
-        onCanvasRef(canvasRef.current);
-    }, [onCanvasRef]);
+    // 外部メソッドを公開
+    useImperativeHandle(ref, () => ({
+        // 背景付きDataURLを返す
+        toDataURL: () => {
+            const canvas = canvasRef.current;
+            if (!canvas) return "";
+            return canvas.toDataURL("image/png");
+        },
+        // 画像をキャンバスにロード
+        loadImage: (src: string) => {
+            const canvas = canvasRef.current;
+            if (!canvas) return;
+            const ctx = canvas.getContext("2d");
+            if (!ctx) return;
+            const img = new Image();
+            img.onload = () => {
+                fillBackground(ctx);
+                ctx.drawImage(img, 0, 0, canvas.width / (window.devicePixelRatio || 1), canvas.height / (window.devicePixelRatio || 1));
+                hasContentRef.current = true;
+            };
+            img.src = src;
+        },
+        isEmpty: () => !hasContentRef.current,
+        clear: () => {
+            const canvas = canvasRef.current;
+            if (!canvas) return;
+            const ctx = canvas.getContext("2d");
+            if (!ctx) return;
+            fillBackground(ctx);
+            hasContentRef.current = false;
+        },
+    }), [fillBackground]);
 
-    // 消しゴムモード切替
-    const toggleEraser = () => {
-        setIsEraser(!isEraser);
+    // --- 描画ロジック ---
+    const getPoint = (e: React.PointerEvent): Point => {
+        const canvas = canvasRef.current!;
+        const rect = canvas.getBoundingClientRect();
+        return {
+            x: e.clientX - rect.left,
+            y: e.clientY - rect.top,
+            pressure: e.pressure || 0.5,
+        };
     };
 
-    // クリア
-    const handleClear = () => {
-        if (canvasRef.current) {
-            canvasRef.current.clear();
+    const drawLine = (from: Point, to: Point, control?: Point) => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+
+        const dpr = window.devicePixelRatio || 1;
+        const currentSize = isEraser ? penSize * 5 : penSize;
+
+        ctx.save();
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.beginPath();
+        ctx.strokeStyle = isEraser ? bgColor : penColor;
+        ctx.lineWidth = currentSize * (0.5 + to.pressure * 0.5);
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+
+        if (control) {
+            // ベジェ曲線で滑らか描画
+            ctx.moveTo(from.x, from.y);
+            ctx.quadraticCurveTo(control.x, control.y, to.x, to.y);
+        } else {
+            ctx.moveTo(from.x, from.y);
+            ctx.lineTo(to.x, to.y);
         }
+
+        ctx.stroke();
+        ctx.restore();
+    };
+
+    const handlePointerDown = (e: React.PointerEvent) => {
+        e.preventDefault();
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        canvas.setPointerCapture(e.pointerId);
+
+        isDrawingRef.current = true;
+        hasContentRef.current = true;
+        const point = getPoint(e);
+        lastPointRef.current = point;
+        prevPointRef.current = null;
+
+        // 点を描画
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+            const dpr = window.devicePixelRatio || 1;
+            const currentSize = isEraser ? penSize * 5 : penSize;
+            ctx.save();
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            ctx.beginPath();
+            ctx.fillStyle = isEraser ? bgColor : penColor;
+            ctx.arc(point.x, point.y, currentSize * 0.5 * (0.5 + point.pressure * 0.5), 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
+    };
+
+    const handlePointerMove = (e: React.PointerEvent) => {
+        if (!isDrawingRef.current) return;
+        e.preventDefault();
+
+        const currentPoint = getPoint(e);
+        const lastPoint = lastPointRef.current;
+        const prevPoint = prevPointRef.current;
+
+        if (lastPoint) {
+            if (prevPoint) {
+                // 3点のベジェ曲線で滑らかに
+                const midX = (lastPoint.x + currentPoint.x) / 2;
+                const midY = (lastPoint.y + currentPoint.y) / 2;
+                drawLine(
+                    { x: (prevPoint.x + lastPoint.x) / 2, y: (prevPoint.y + lastPoint.y) / 2, pressure: lastPoint.pressure },
+                    { x: midX, y: midY, pressure: currentPoint.pressure },
+                    lastPoint
+                );
+            } else {
+                drawLine(lastPoint, currentPoint);
+            }
+        }
+
+        prevPointRef.current = lastPointRef.current;
+        lastPointRef.current = currentPoint;
+    };
+
+    const handlePointerUp = () => {
+        isDrawingRef.current = false;
+        lastPointRef.current = null;
+        prevPointRef.current = null;
     };
 
     return (
@@ -157,7 +320,7 @@ export default function DrawingCanvas({ onCanvasRef }: DrawingCanvasProps) {
                 {/* 消しゴム */}
                 <button
                     className={`btn-icon ${isEraser ? "active" : ""}`}
-                    onClick={toggleEraser}
+                    onClick={() => setIsEraser(!isEraser)}
                     title="消しゴム"
                     style={{ width: "36px", height: "36px", fontSize: "16px" }}
                 >
@@ -167,7 +330,14 @@ export default function DrawingCanvas({ onCanvasRef }: DrawingCanvasProps) {
                 {/* クリア */}
                 <button
                     className="btn-icon"
-                    onClick={handleClear}
+                    onClick={() => {
+                        const canvas = canvasRef.current;
+                        if (!canvas) return;
+                        const ctx = canvas.getContext("2d");
+                        if (!ctx) return;
+                        fillBackground(ctx);
+                        hasContentRef.current = false;
+                    }}
                     title="全消去"
                     style={{ width: "36px", height: "36px", fontSize: "16px" }}
                 >
@@ -181,25 +351,23 @@ export default function DrawingCanvas({ onCanvasRef }: DrawingCanvasProps) {
                 className="drawing-canvas"
                 style={{
                     flex: 1,
-                    background: "#1a1f35",
+                    background: bgColor,
                     cursor: isEraser ? "cell" : "crosshair",
                     overflow: "hidden",
                 }}
             >
-                <SignatureCanvas
+                <canvas
                     ref={canvasRef}
-                    penColor={isEraser ? "#1a1f35" : penColor}
-                    minWidth={isEraser ? penSize * 4 : penSize}
-                    maxWidth={isEraser ? penSize * 6 : penSize + 1}
-                    canvasProps={{
-                        width: canvasSize.width,
-                        height: canvasSize.height,
-                        style: {
-                            touchAction: "none",
-                        },
-                    }}
+                    style={{ touchAction: "none", display: "block" }}
+                    onPointerDown={handlePointerDown}
+                    onPointerMove={handlePointerMove}
+                    onPointerUp={handlePointerUp}
+                    onPointerLeave={handlePointerUp}
+                    onPointerCancel={handlePointerUp}
                 />
             </div>
         </div>
     );
-}
+});
+
+export default DrawingCanvas;

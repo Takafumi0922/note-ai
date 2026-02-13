@@ -62,11 +62,20 @@ export async function getNoteData(folderId: string) {
         noteId ? getFileContent(token, noteId) : "",
     ]);
 
+    // スケッチ画像があればBase64で取得
+    let sketchBase64: string | null = null;
+    if (sketchId) {
+        const { downloadFile } = await import("@/lib/drive");
+        const buffer = await downloadFile(token, sketchId);
+        sketchBase64 = `data:image/png;base64,${buffer.toString("base64")}`;
+    }
+
     return {
         summary: summaryText,
         note: noteText,
         hasSketch: !!sketchId,
         sketchFileId: sketchId,
+        sketchBase64,
     };
 }
 
