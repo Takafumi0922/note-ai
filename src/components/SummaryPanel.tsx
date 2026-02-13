@@ -1,19 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 
 interface SummaryPanelProps {
     summaryText: string;
     onSummaryChange: (text: string) => void;
     selectedAudioId: string | null;
+    onInsertToNote?: (text: string) => void;
 }
 
 export default function SummaryPanel({
     summaryText,
     onSummaryChange,
     selectedAudioId,
+    onInsertToNote,
 }: SummaryPanelProps) {
     const [isLoading, setIsLoading] = useState(false);
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
 
     // AI要約を実行
     const handleSummarize = async () => {
@@ -44,6 +47,25 @@ export default function SummaryPanel({
             );
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    // 全文をノートに追加
+    const handleInsertAll = () => {
+        if (onInsertToNote && summaryText.trim()) {
+            onInsertToNote(summaryText);
+        }
+    };
+
+    // 選択テキストをノートに追加
+    const handleInsertSelection = () => {
+        if (!onInsertToNote || !textareaRef.current) return;
+        const ta = textareaRef.current;
+        const selected = ta.value.substring(ta.selectionStart, ta.selectionEnd);
+        if (selected.trim()) {
+            onInsertToNote(selected);
+        } else {
+            alert("テキストを選択してから「選択追加」を押してください。");
         }
     };
 
@@ -121,6 +143,7 @@ export default function SummaryPanel({
 
             {/* 要約テキストエリア */}
             <textarea
+                ref={textareaRef}
                 className="editor-textarea"
                 value={summaryText}
                 onChange={(e) => onSummaryChange(e.target.value)}
@@ -134,6 +157,26 @@ export default function SummaryPanel({
                     lineHeight: 1.7,
                 }}
             />
+
+            {/* ノートへ追加ボタン */}
+            {onInsertToNote && summaryText.trim() && (
+                <div style={{ display: "flex", gap: "8px" }}>
+                    <button
+                        className="btn-secondary"
+                        onClick={handleInsertAll}
+                        style={{ flex: 1, fontSize: "12px", padding: "8px 12px" }}
+                    >
+                        📋 全文追加
+                    </button>
+                    <button
+                        className="btn-secondary"
+                        onClick={handleInsertSelection}
+                        style={{ flex: 1, fontSize: "12px", padding: "8px 12px" }}
+                    >
+                        ✂️ 選択追加
+                    </button>
+                </div>
+            )}
         </div>
     );
 }

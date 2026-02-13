@@ -19,18 +19,19 @@ interface Point {
 const DrawingCanvas = forwardRef<DrawingCanvasHandle>(function DrawingCanvas(_, ref) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
-    const [penColor, setPenColor] = useState("#ffffff");
+    const [penColor, setPenColor] = useState("#1e293b");
     const [penSize, setPenSize] = useState(2);
     const [isEraser, setIsEraser] = useState(false);
     const isDrawingRef = useRef(false);
     const lastPointRef = useRef<Point | null>(null);
     const prevPointRef = useRef<Point | null>(null);
     const hasContentRef = useRef(false);
-    const bgColor = "#1a1f35";
+    const undoStackRef = useRef<ImageData[]>([]);
+    const bgColor = "#ffffff";
 
     // カラーパレット
     const colors = [
-        "#ffffff",
+        "#1e293b",
         "#ef4444",
         "#f59e0b",
         "#10b981",
@@ -189,11 +190,41 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle>(function DrawingCanvas(_, 
         ctx.restore();
     };
 
+    // アンドゥ用スナップショットを保存
+    const saveSnapshot = () => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+        const snapshot = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        undoStackRef.current.push(snapshot);
+        // 最大20スナップショット
+        if (undoStackRef.current.length > 20) {
+            undoStackRef.current.shift();
+        }
+    };
+
+    // アンドゥ実行
+    const handleUndo = () => {
+        const canvas = canvasRef.current;
+        if (!canvas || undoStackRef.current.length === 0) return;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+        const snapshot = undoStackRef.current.pop()!;
+        ctx.putImageData(snapshot, 0, 0);
+        if (undoStackRef.current.length === 0) {
+            hasContentRef.current = false;
+        }
+    };
+
     const handlePointerDown = (e: React.PointerEvent) => {
         e.preventDefault();
         const canvas = canvasRef.current;
         if (!canvas) return;
         canvas.setPointerCapture(e.pointerId);
+
+        // ストローク開始前にスナップショット保存
+        saveSnapshot();
 
         isDrawingRef.current = true;
         hasContentRef.current = true;
@@ -368,6 +399,16 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle>(function DrawingCanvas(_, 
                     style={{ width: "36px", height: "36px", fontSize: "16px" }}
                 >
                     🗑️
+                </button>
+
+                {/* アンドゥ */}
+                <button
+                    className="btn-icon"
+                    onClick={handleUndo}
+                    title="元に戻す"
+                    style={{ width: "36px", height: "36px", fontSize: "16px" }}
+                >
+                    ↩️
                 </button>
             </div>
 

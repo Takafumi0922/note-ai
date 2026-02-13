@@ -3,25 +3,25 @@
 
 @import "tailwindcss";
 
-/* カスタムプロパティ */
+/* カスタムプロパティ - ライトテーマ */
 :root {
-  --bg-primary: #0a0e1a;
-  --bg-secondary: #111827;
-  --bg-card: #1a1f35;
-  --bg-card-hover: #232845;
-  --border-color: #2a3050;
-  --border-accent: #4f46e5;
-  --text-primary: #f1f5f9;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
+  --bg-primary: #f5f7fb;
+  --bg-secondary: #ffffff;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f0f2f8;
+  --border-color: #e2e6ef;
+  --border-accent: #6366f1;
+  --text-primary: #1e293b;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
   --accent-primary: #6366f1;
   --accent-secondary: #8b5cf6;
   --accent-gradient: linear-gradient(135deg, #6366f1, #8b5cf6, #a78bfa);
   --success: #10b981;
   --warning: #f59e0b;
   --danger: #ef4444;
-  --glass-bg: rgba(26, 31, 53, 0.7);
-  --glass-border: rgba(99, 102, 241, 0.2);
+  --glass-bg: rgba(255, 255, 255, 0.8);
+  --glass-border: rgba(99, 102, 241, 0.15);
 }
 
 * {
@@ -280,7 +280,7 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--bg-secondary);
+  background: var(--bg-primary);
 }
 
 ::-webkit-scrollbar-thumb {
@@ -454,8 +454,8 @@ body {
   min-height: 100vh;
   background: var(--bg-primary);
   background-image:
-    radial-gradient(ellipse at 20% 50%, rgba(99, 102, 241, 0.08) 0%, transparent 50%),
-    radial-gradient(ellipse at 80% 50%, rgba(139, 92, 246, 0.08) 0%, transparent 50%);
+    radial-gradient(ellipse at 20% 50%, rgba(99, 102, 241, 0.12) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 50%, rgba(139, 92, 246, 0.12) 0%, transparent 50%);
 }
 
 /* シマーアニメーション */
@@ -477,4 +477,33 @@ body {
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
   border-radius: 8px;
+}
+
+/* 印刷用CSS */
+@media print {
+
+  header,
+  .drawing-canvas,
+  .btn-primary,
+  .btn-secondary,
+  .btn-icon {
+    display: none !important;
+  }
+
+  body {
+    background: white !important;
+    color: black !important;
+  }
+
+  .glass-card {
+    background: white !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  .editor-textarea {
+    border: none !important;
+    background: white !important;
+    color: black !important;
+  }
 }

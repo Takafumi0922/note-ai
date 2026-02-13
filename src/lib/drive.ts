@@ -203,3 +203,17 @@ export async function findFileInFolder(
     }
     return null;
 }
+
+/**
+ * フォルダをゴミ箱に移動（削除）
+ */
+export async function deleteFolder(
+    accessToken: string,
+    folderId: string
+): Promise<void> {
+    const drive = getDriveClient(accessToken);
+    await drive.files.update({
+        fileId: folderId,
+        requestBody: { trashed: true },
+    });
+}

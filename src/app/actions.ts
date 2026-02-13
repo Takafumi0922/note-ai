@@ -161,3 +161,37 @@ export async function ensureRootFolder() {
     await getOrCreateRootFolder(token);
     return { success: true };
 }
+
+/**
+ * ノートを削除（フォルダごと削除）
+ */
+export async function deleteNote(folderId: string) {
+    const token = await getAccessToken();
+    const { deleteFolder } = await import("@/lib/drive");
+    await deleteFolder(token, folderId);
+    return { success: true };
+}
+
+/**
+ * タグ情報を読み込み
+ */
+export async function getNoteTags(folderId: string) {
+    const token = await getAccessToken();
+    const tagsFileId = await findFileInFolder(token, folderId, "tags.json");
+    if (!tagsFileId) return [];
+    const content = await getFileContent(token, tagsFileId);
+    try {
+        return JSON.parse(content) as string[];
+    } catch {
+        return [];
+    }
+}
+
+/**
+ * タグ情報を保存
+ */
+export async function saveNoteTags(folderId: string, tags: string[]) {
+    const token = await getAccessToken();
+    await uploadFile(token, folderId, "tags.json", "application/json", JSON.stringify(tags));
+    return { success: true };
+}

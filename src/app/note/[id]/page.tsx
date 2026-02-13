@@ -8,7 +8,7 @@ import AudioPanel from "@/components/AudioPanel";
 import SummaryPanel from "@/components/SummaryPanel";
 import TextEditor from "@/components/TextEditor";
 import DrawingCanvas, { DrawingCanvasHandle } from "@/components/DrawingCanvas";
-import { getNoteData, saveNote } from "@/app/actions";
+import { getNoteData, saveNote, getNoteTags, saveNoteTags } from "@/app/actions";
 
 export default function NotePage() {
     const { data: session, status } = useSession();
@@ -24,29 +24,38 @@ export default function NotePage() {
     const [activeTab, setActiveTab] = useState<"text" | "draw">("text");
     const [isSaving, setIsSaving] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
+    const [autoSaveStatus, setAutoSaveStatus] = useState<"" | "saving" | "saved">("");
+    const [tags, setTags] = useState<string[]>([]);
+    const [tagInput, setTagInput] = useState("");
     const canvasRef = useRef<DrawingCanvasHandle>(null);
-    // スケッチの読み込みを遅延するためのデータ保持
     const pendingSketchRef = useRef<string | null>(null);
+    const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const isInitialLoadRef = useRef(true);
 
     // ノートデータを読み込み
     const loadNote = useCallback(async () => {
         try {
             setIsLoading(true);
-            const data = await getNoteData(folderId);
+            const [data, noteTags] = await Promise.all([
+                getNoteData(folderId),
+                getNoteTags(folderId),
+            ]);
             setSummaryText(data.summary);
             setNoteText(data.note);
+            setTags(noteTags);
 
             // スケッチ画像の復元
             if (data.sketchBase64) {
                 if (canvasRef.current) {
                     canvasRef.current.loadImage(data.sketchBase64);
                 } else {
-                    // キャンバスがまだマウントされていない場合は保持
                     pendingSketchRef.current = data.sketchBase64;
                 }
             }
 
             setNoteTitle("ノート");
+            // 初回ロード完了フラグ
+            setTimeout(() => { isInitialLoadRef.current = false; }, 500);
         } catch (error) {
             console.error("読み込みエラー:", error);
         } finally {
@@ -63,7 +72,6 @@ export default function NotePage() {
     // タブ切り替え時に保留中のスケッチをロード
     useEffect(() => {
         if (activeTab === "draw" && pendingSketchRef.current && canvasRef.current) {
-            // 少し遅延してキャンバスが完全にマウントされるのを待つ
             setTimeout(() => {
                 if (pendingSketchRef.current && canvasRef.current) {
                     canvasRef.current.loadImage(pendingSketchRef.current);
@@ -91,37 +99,87 @@ export default function NotePage() {
         }
     }, [session, folderId]);
 
-    // 保存処理
+    // 自動保存（テキスト・要約変更時、5秒後に自動保存）
+    useEffect(() => {
+        if (isInitialLoadRef.current || isLoading) return;
+
+        if (autoSaveTimerRef.current) {
+            clearTimeout(autoSaveTimerRef.current);
+        }
+
+        autoSaveTimerRef.current = setTimeout(async () => {
+            try {
+                setAutoSaveStatus("saving");
+                let sketchBase64: string | undefined;
+                if (canvasRef.current && !canvasRef.current.isEmpty()) {
+                    sketchBase64 = canvasRef.current.toDataURL();
+                }
+                await saveNote(folderId, {
+                    summary: summaryText,
+                    note: noteText,
+                    sketchBase64,
+                });
+                setAutoSaveStatus("saved");
+                setTimeout(() => setAutoSaveStatus(""), 2000);
+            } catch {
+                setAutoSaveStatus("");
+            }
+        }, 5000);
+
+        return () => {
+            if (autoSaveTimerRef.current) {
+                clearTimeout(autoSaveTimerRef.current);
+            }
+        };
+    }, [noteText, summaryText, folderId, isLoading]);
+
+    // 手動保存処理
     const handleSave = async () => {
         setIsSaving(true);
         try {
             let sketchBase64: string | undefined;
-
-            // キャンバスデータの取得
             if (canvasRef.current && !canvasRef.current.isEmpty()) {
                 sketchBase64 = canvasRef.current.toDataURL();
             }
 
-            await saveNote(folderId, {
-                summary: summaryText,
-                note: noteText,
-                sketchBase64,
-            });
+            await Promise.all([
+                saveNote(folderId, {
+                    summary: summaryText,
+                    note: noteText,
+                    sketchBase64,
+                }),
+                saveNoteTags(folderId, tags),
+            ]);
 
             // 保存成功フィードバック
-            const saveBtn = document.querySelector(".btn-primary") as HTMLElement;
-            if (saveBtn) {
-                saveBtn.style.boxShadow = "0 0 30px rgba(16, 185, 129, 0.5)";
-                setTimeout(() => {
-                    saveBtn.style.boxShadow = "";
-                }, 1000);
-            }
+            setAutoSaveStatus("saved");
+            setTimeout(() => setAutoSaveStatus(""), 2000);
         } catch (error) {
             console.error("保存エラー:", error);
             alert("保存に失敗しました。");
         } finally {
             setIsSaving(false);
         }
+    };
+
+    // 要約テキストをノートに挿入
+    const handleInsertToNote = (text: string) => {
+        setNoteText((prev) => prev ? prev + "\n\n---\n\n" + text : text);
+        setActiveTab("text");
+    };
+
+    // タグ追加
+    const handleAddTag = () => {
+        const t = tagInput.trim();
+        if (t && !tags.includes(t)) {
+            setTags([...tags, t]);
+            setTagInput("");
+        }
+    };
+
+    // タグ削除
+    const handleRemoveTag = (tag: string) => {
+        setTags(tags.filter((t) => t !== tag));
     };
 
     // 未ログイン
@@ -152,7 +210,83 @@ export default function NotePage() {
             }}
         >
             {/* ヘッダー */}
-            <Header title={noteTitle} onSave={handleSave} isSaving={isSaving} />
+            <Header
+                title={noteTitle}
+                onSave={handleSave}
+                isSaving={isSaving}
+                onExportPDF={() => window.print()}
+            />
+
+            {/* 自動保存インジケーター + タグ */}
+            <div
+                style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "4px 16px",
+                    borderBottom: "1px solid var(--border-color)",
+                    background: "var(--bg-secondary)",
+                    gap: "8px",
+                    flexWrap: "wrap",
+                }}
+            >
+                {/* タグ表示・追加 */}
+                <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                    <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>🏷️</span>
+                    {tags.map((tag) => (
+                        <span
+                            key={tag}
+                            style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "4px",
+                                padding: "2px 8px",
+                                borderRadius: "12px",
+                                background: "rgba(99, 102, 241, 0.1)",
+                                color: "var(--accent-primary)",
+                                fontSize: "11px",
+                                fontWeight: 500,
+                            }}
+                        >
+                            {tag}
+                            <button
+                                onClick={() => handleRemoveTag(tag)}
+                                style={{
+                                    background: "none",
+                                    border: "none",
+                                    cursor: "pointer",
+                                    fontSize: "10px",
+                                    color: "var(--text-muted)",
+                                    padding: "0 2px",
+                                }}
+                            >
+                                ✕
+                            </button>
+                        </span>
+                    ))}
+                    <input
+                        type="text"
+                        placeholder="タグ追加..."
+                        value={tagInput}
+                        onChange={(e) => setTagInput(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") handleAddTag(); }}
+                        style={{
+                            background: "transparent",
+                            border: "none",
+                            outline: "none",
+                            color: "var(--text-primary)",
+                            fontSize: "11px",
+                            width: "80px",
+                        }}
+                    />
+                </div>
+
+                {/* 自動保存ステータス */}
+                <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>
+                    {autoSaveStatus === "saving" && "💾 保存中..."}
+                    {autoSaveStatus === "saved" && "✅ 保存済み"}
+                </span>
+            </div>
 
             {/* メインレイアウト: 左 / 右 */}
             <div
@@ -175,7 +309,6 @@ export default function NotePage() {
                         overflow: "hidden",
                     }}
                 >
-                    {/* 左上: 音声操作 */}
                     <div style={{ flex: 1, minHeight: 0 }}>
                         <AudioPanel
                             folderId={folderId}
@@ -184,12 +317,12 @@ export default function NotePage() {
                         />
                     </div>
 
-                    {/* 左下: AI要約 */}
                     <div style={{ flex: 1, minHeight: 0 }}>
                         <SummaryPanel
                             summaryText={summaryText}
                             onSummaryChange={setSummaryText}
                             selectedAudioId={selectedAudioId}
+                            onInsertToNote={handleInsertToNote}
                         />
                     </div>
                 </div>
