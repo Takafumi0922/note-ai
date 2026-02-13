@@ -89,6 +89,32 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle>(function DrawingCanvas(_, 
         return () => window.removeEventListener("resize", updateCanvasSize);
     }, [updateCanvasSize]);
 
+    // iOS Safari でのテキスト選択・ロングプレスメニューを防止
+    useEffect(() => {
+        const container = containerRef.current;
+        if (!container) return;
+
+        // touchstart を passive: false で防止しないとiOSで選択される
+        const preventTouch = (e: TouchEvent) => {
+            e.preventDefault();
+        };
+        const preventSelect = (e: Event) => {
+            e.preventDefault();
+        };
+
+        container.addEventListener("touchstart", preventTouch, { passive: false });
+        container.addEventListener("touchmove", preventTouch, { passive: false });
+        container.addEventListener("selectstart", preventSelect);
+        container.addEventListener("contextmenu", preventSelect);
+
+        return () => {
+            container.removeEventListener("touchstart", preventTouch);
+            container.removeEventListener("touchmove", preventTouch);
+            container.removeEventListener("selectstart", preventSelect);
+            container.removeEventListener("contextmenu", preventSelect);
+        };
+    }, []);
+
     // 外部メソッドを公開
     useImperativeHandle(ref, () => ({
         // 背景付きDataURLを返す

@@ -360,6 +360,16 @@ body {
 /* 手書きキャンバスのタッチ制御 */
 .drawing-canvas {
   touch-action: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.drawing-canvas canvas {
+  touch-action: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 /* モーダル */
