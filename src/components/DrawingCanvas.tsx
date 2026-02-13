@@ -354,16 +354,20 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle>(function DrawingCanvas(_, 
                     background: bgColor,
                     cursor: isEraser ? "cell" : "crosshair",
                     overflow: "hidden",
+                    userSelect: "none",
+                    WebkitUserSelect: "none",
+                    WebkitTouchCallout: "none",
                 }}
             >
                 <canvas
                     ref={canvasRef}
-                    style={{ touchAction: "none", display: "block" }}
+                    style={{ touchAction: "none", display: "block", userSelect: "none" }}
                     onPointerDown={handlePointerDown}
                     onPointerMove={handlePointerMove}
                     onPointerUp={handlePointerUp}
                     onPointerLeave={handlePointerUp}
                     onPointerCancel={handlePointerUp}
+                    onContextMenu={(e) => e.preventDefault()}
                 />
             </div>
         </div>
