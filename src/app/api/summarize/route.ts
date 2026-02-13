@@ -4,6 +4,9 @@ import { authOptions } from "@/lib/auth";
 import { downloadFile } from "@/lib/drive";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
+// Vercel Serverless Function のタイムアウト設定 (秒)
+export const maxDuration = 60;
+
 export async function POST(request: NextRequest) {
     try {
         // 認証チェック
