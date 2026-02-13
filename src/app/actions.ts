@@ -1,0 +1,154 @@
+"use server";
+
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import {
+    getOrCreateRootFolder,
+    createNoteFolder,
+    listNoteFolders,
+    listAudioFiles,
+    uploadFile,
+    findFileInFolder,
+    getFileContent,
+} from "@/lib/drive";
+
+// セッションからアクセストークンを取得するヘルパー
+async function getAccessToken(): Promise<string> {
+    const session = await getServerSession(authOptions);
+    if (!session?.accessToken) {
+        throw new Error("認証されていません");
+    }
+    return session.accessToken;
+}
+
+/**
+ * ノート一覧を取得
+ */
+export async function getNotes() {
+    const token = await getAccessToken();
+    const folders = await listNoteFolders(token);
+    return folders.map((f) => ({
+        id: f.id!,
+        name: f.name!,
+        createdTime: f.createdTime || "",
+        modifiedTime: f.modifiedTime || "",
+    }));
+}
+
+/**
+ * 新規ノートを作成
+ */
+export async function createNote(title: string) {
+    const token = await getAccessToken();
+    const folderId = await createNoteFolder(token, title);
+    return { id: folderId, name: title };
+}
+
+/**
+ * ノートデータを読み込み
+ */
+export async function getNoteData(folderId: string) {
+    const token = await getAccessToken();
+
+    // 各ファイルを並行で検索・取得
+    const [summaryId, noteId, sketchId] = await Promise.all([
+        findFileInFolder(token, folderId, "summary.txt"),
+        findFileInFolder(token, folderId, "note.md"),
+        findFileInFolder(token, folderId, "sketch.png"),
+    ]);
+
+    const [summaryText, noteText] = await Promise.all([
+        summaryId ? getFileContent(token, summaryId) : "",
+        noteId ? getFileContent(token, noteId) : "",
+    ]);
+
+    return {
+        summary: summaryText,
+        note: noteText,
+        hasSketch: !!sketchId,
+        sketchFileId: sketchId,
+    };
+}
+
+/**
+ * ノートを一括保存
+ */
+export async function saveNote(
+    folderId: string,
+    data: {
+        summary: string;
+        note: string;
+        sketchBase64?: string;
+    }
+) {
+    const token = await getAccessToken();
+
+    const promises: Promise<string>[] = [];
+
+    // summary.txt を保存
+    if (data.summary) {
+        promises.push(
+            uploadFile(token, folderId, "summary.txt", "text/plain", data.summary)
+        );
+    }
+
+    // note.md を保存
+    if (data.note) {
+        promises.push(
+            uploadFile(token, folderId, "note.md", "text/markdown", data.note)
+        );
+    }
+
+    // sketch.png を保存
+    if (data.sketchBase64) {
+        const base64Data = data.sketchBase64.replace(
+            /^data:image\/png;base64,/,
+            ""
+        );
+        const buffer = Buffer.from(base64Data, "base64");
+        promises.push(
+            uploadFile(token, folderId, "sketch.png", "image/png", buffer)
+        );
+    }
+
+    await Promise.all(promises);
+    return { success: true };
+}
+
+/**
+ * 音声ファイルをアップロード
+ */
+export async function uploadAudio(folderId: string, audioBase64: string, fileName: string) {
+    const token = await getAccessToken();
+    const buffer = Buffer.from(audioBase64, "base64");
+    const fileId = await uploadFile(
+        token,
+        folderId,
+        fileName,
+        "audio/webm",
+        buffer
+    );
+    return { fileId, fileName };
+}
+
+/**
+ * 音声ファイル一覧を取得
+ */
+export async function getAudioFiles(folderId: string) {
+    const token = await getAccessToken();
+    const files = await listAudioFiles(token, folderId);
+    return files.map((f) => ({
+        id: f.id!,
+        name: f.name!,
+        createdTime: f.createdTime || "",
+    }));
+}
+
+/**
+ * ルートフォルダの初期化確認
+ */
+export async function ensureRootFolder() {
+    const token = await getAccessToken();
+    await getOrCreateRootFolder(token);
+    return { success: true };
+}
