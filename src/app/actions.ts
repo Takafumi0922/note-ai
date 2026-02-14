@@ -197,39 +197,54 @@ export async function saveNoteTags(folderId: string, tags: string[]) {
 }
 
 /**
- * PDFファイルをアップロード
+ * ドキュメントファイルをアップロード（PDF, Word, テキスト）
  */
-export async function uploadPdf(folderId: string, fileName: string, base64Data: string) {
+export async function uploadDocument(folderId: string, fileName: string, base64Data: string, mimeType: string) {
     const token = await getAccessToken();
-    // Base64からBufferに変換
     const buffer = Buffer.from(base64Data, "base64");
-    await uploadFile(token, folderId, fileName, "application/pdf", buffer);
+    await uploadFile(token, folderId, fileName, mimeType, buffer);
     return { success: true };
 }
 
 /**
- * PDFファイル一覧を取得
+ * ドキュメントファイル一覧を取得
  */
-export async function getPdfFiles(folderId: string) {
+export async function getDocumentFiles(folderId: string) {
     const token = await getAccessToken();
-    const { listPdfFiles } = await import("@/lib/drive");
-    const files = await listPdfFiles(token, folderId);
+    const { listDocumentFiles } = await import("@/lib/drive");
+    const files = await listDocumentFiles(token, folderId);
     return files.map((f) => ({
         id: f.id!,
         name: f.name!,
+        mimeType: f.mimeType || "",
         createdTime: f.createdTime || "",
     }));
 }
 
 /**
- * PDFからテキストを抽出
+ * ドキュメントからテキストを抽出（PDF, Word, テキスト対応）
  */
-export async function extractPdfText(fileId: string) {
+export async function extractDocumentText(fileId: string, mimeType: string) {
     const token = await getAccessToken();
     const { downloadFile } = await import("@/lib/drive");
     const buffer = await downloadFile(token, fileId);
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const pdfParse = require("pdf-parse");
-    const data = await pdfParse(buffer);
-    return data.text;
+
+    if (mimeType === "application/pdf") {
+        // PDF: pdf-parseでテキスト抽出
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const pdfParse = require("pdf-parse");
+        const data = await pdfParse(buffer);
+        return data.text as string;
+    } else if (
+        mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+        mimeType === "application/msword"
+    ) {
+        // Word: mammothでテキスト抽出
+        const mammoth = await import("mammoth");
+        const result = await mammoth.extractRawText({ buffer });
+        return result.value;
+    } else {
+        // テキストファイル: そのまま返す
+        return buffer.toString("utf-8");
+    }
 }

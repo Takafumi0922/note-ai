@@ -1,11 +1,32 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { uploadPdf, getPdfFiles, extractPdfText } from "@/app/actions";
+import { uploadDocument, getDocumentFiles, extractDocumentText } from "@/app/actions";
 
-interface PdfFile {
+// 対応MIMEタイプ
+const ACCEPTED_TYPES: Record<string, string> = {
+    "application/pdf": "📄",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "📝",
+    "application/msword": "📝",
+    "text/plain": "📃",
+};
+
+// ファイル拡張子からMIMEを取得
+function getMimeType(fileName: string): string {
+    const ext = fileName.split(".").pop()?.toLowerCase();
+    switch (ext) {
+        case "pdf": return "application/pdf";
+        case "docx": return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+        case "doc": return "application/msword";
+        case "txt": return "text/plain";
+        default: return "application/octet-stream";
+    }
+}
+
+interface DocFile {
     id: string;
     name: string;
+    mimeType: string;
     createdTime: string;
 }
 
@@ -20,50 +41,51 @@ export default function PdfPanel({
     onInsertToNote,
     onSummarizeText,
 }: PdfPanelProps) {
-    const [pdfFiles, setPdfFiles] = useState<PdfFile[]>([]);
+    const [docFiles, setDocFiles] = useState<DocFile[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isUploading, setIsUploading] = useState(false);
-    const [selectedPdf, setSelectedPdf] = useState<PdfFile | null>(null);
-    const [pdfText, setPdfText] = useState("");
+    const [selectedDoc, setSelectedDoc] = useState<DocFile | null>(null);
+    const [docText, setDocText] = useState("");
     const [isExtracting, setIsExtracting] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-    // PDF一覧を読み込み
-    const loadPdfs = useCallback(async () => {
+    // ドキュメント一覧取得
+    const loadDocs = useCallback(async () => {
         try {
             setIsLoading(true);
-            const files = await getPdfFiles(folderId);
-            setPdfFiles(files);
+            const files = await getDocumentFiles(folderId);
+            setDocFiles(files);
         } catch (error) {
-            console.error("PDF一覧取得エラー:", error);
+            console.error("ドキュメント一覧取得エラー:", error);
         } finally {
             setIsLoading(false);
         }
     }, [folderId]);
 
     useEffect(() => {
-        loadPdfs();
-    }, [loadPdfs]);
+        loadDocs();
+    }, [loadDocs]);
 
-    // PDFアップロード
+    // ファイルアップロード
     const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
-        if (file.type !== "application/pdf") {
-            alert("PDFファイルのみアップロードできます。");
+
+        const mimeType = getMimeType(file.name);
+        if (!ACCEPTED_TYPES[mimeType]) {
+            alert("PDF、Word (.docx/.doc)、テキスト (.txt) のみ対応しています。");
             return;
         }
 
         setIsUploading(true);
         try {
-            // ファイルをBase64に変換
             const arrayBuffer = await file.arrayBuffer();
             const base64 = Buffer.from(arrayBuffer).toString("base64");
-            await uploadPdf(folderId, file.name, base64);
-            await loadPdfs();
+            await uploadDocument(folderId, file.name, base64, mimeType);
+            await loadDocs();
         } catch (error) {
-            console.error("PDFアップロードエラー:", error);
+            console.error("アップロードエラー:", error);
             alert("アップロードに失敗しました。");
         } finally {
             setIsUploading(false);
@@ -71,47 +93,24 @@ export default function PdfPanel({
         }
     };
 
-    // PDFテキスト抽出
-    const handleSelectPdf = async (pdf: PdfFile) => {
-        setSelectedPdf(pdf);
+    // テキスト抽出
+    const handleSelectDoc = async (doc: DocFile) => {
+        setSelectedDoc(doc);
         setIsExtracting(true);
-        setPdfText("");
+        setDocText("");
         try {
-            const text = await extractPdfText(pdf.id);
-            setPdfText(text);
+            const text = await extractDocumentText(doc.id, doc.mimeType);
+            setDocText(text);
         } catch (error) {
             console.error("テキスト抽出エラー:", error);
-            setPdfText("テキストの抽出に失敗しました。");
+            setDocText("テキストの抽出に失敗しました。");
         } finally {
             setIsExtracting(false);
         }
     };
 
-    // 全文をノートに追加
-    const handleInsertAll = () => {
-        if (pdfText.trim()) {
-            onInsertToNote(pdfText);
-        }
-    };
-
-    // 選択テキストをノートに追加
-    const handleInsertSelection = () => {
-        if (!textareaRef.current) return;
-        const ta = textareaRef.current;
-        const selected = ta.value.substring(ta.selectionStart, ta.selectionEnd);
-        if (selected.trim()) {
-            onInsertToNote(selected);
-        } else {
-            alert("テキストを選択してから押してください。");
-        }
-    };
-
-    // AI要約を実行
-    const handleSummarize = () => {
-        if (pdfText.trim()) {
-            onSummarizeText(pdfText);
-        }
-    };
+    // アイコン取得
+    const getIcon = (mimeType: string) => ACCEPTED_TYPES[mimeType] || "📄";
 
     return (
         <div
@@ -135,9 +134,9 @@ export default function PdfPanel({
                 }}
             >
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <span style={{ fontSize: "18px" }}>📄</span>
+                    <span style={{ fontSize: "18px" }}>📁</span>
                     <h3 style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-secondary)" }}>
-                        PDF
+                        ドキュメント
                     </h3>
                 </div>
 
@@ -161,7 +160,7 @@ export default function PdfPanel({
                     <input
                         ref={fileInputRef}
                         type="file"
-                        accept=".pdf"
+                        accept=".pdf,.docx,.doc,.txt"
                         onChange={handleUpload}
                         disabled={isUploading}
                         style={{ display: "none" }}
@@ -169,18 +168,18 @@ export default function PdfPanel({
                 </label>
             </div>
 
-            {/* PDF一覧 / テキスト表示の切り替え */}
-            {selectedPdf ? (
-                /* テキスト表示モード */
+            {/* テキスト表示 or ファイル一覧 */}
+            {selectedDoc ? (
                 <>
                     <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                         <button
                             className="btn-icon"
-                            onClick={() => { setSelectedPdf(null); setPdfText(""); }}
+                            onClick={() => { setSelectedDoc(null); setDocText(""); }}
                             style={{ width: "28px", height: "28px", fontSize: "12px" }}
                         >
                             ←
                         </button>
+                        <span style={{ fontSize: "14px" }}>{getIcon(selectedDoc.mimeType)}</span>
                         <span
                             style={{
                                 fontSize: "12px",
@@ -191,7 +190,7 @@ export default function PdfPanel({
                                 flex: 1,
                             }}
                         >
-                            {selectedPdf.name}
+                            {selectedDoc.name}
                         </span>
                     </div>
 
@@ -205,7 +204,7 @@ export default function PdfPanel({
                             <textarea
                                 ref={textareaRef}
                                 className="editor-textarea"
-                                value={pdfText}
+                                value={docText}
                                 readOnly
                                 style={{
                                     flex: 1,
@@ -217,25 +216,33 @@ export default function PdfPanel({
                                 }}
                             />
 
-                            {/* アクションボタン */}
                             <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
                                 <button
                                     className="btn-secondary"
-                                    onClick={handleSummarize}
+                                    onClick={() => docText.trim() && onSummarizeText(docText)}
                                     style={{ flex: 1, fontSize: "11px", padding: "6px 8px" }}
                                 >
                                     🤖 AI要約
                                 </button>
                                 <button
                                     className="btn-secondary"
-                                    onClick={handleInsertAll}
+                                    onClick={() => docText.trim() && onInsertToNote(docText)}
                                     style={{ flex: 1, fontSize: "11px", padding: "6px 8px" }}
                                 >
                                     📋 全文引用
                                 </button>
                                 <button
                                     className="btn-secondary"
-                                    onClick={handleInsertSelection}
+                                    onClick={() => {
+                                        if (!textareaRef.current) return;
+                                        const ta = textareaRef.current;
+                                        const selected = ta.value.substring(ta.selectionStart, ta.selectionEnd);
+                                        if (selected.trim()) {
+                                            onInsertToNote(selected);
+                                        } else {
+                                            alert("テキストを選択してから押してください。");
+                                        }
+                                    }}
                                     style={{ flex: 1, fontSize: "11px", padding: "6px 8px" }}
                                 >
                                     ✂️ 選択引用
@@ -245,29 +252,31 @@ export default function PdfPanel({
                     )}
                 </>
             ) : (
-                /* ファイル一覧モード */
                 <div style={{ flex: 1, overflow: "auto" }}>
                     {isLoading ? (
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%" }}>
                             <span className="spinner" />
                         </div>
-                    ) : pdfFiles.length === 0 ? (
+                    ) : docFiles.length === 0 ? (
                         <div style={{ textAlign: "center", padding: "24px 8px" }}>
-                            <span style={{ fontSize: "28px", display: "block", marginBottom: "8px" }}>📄</span>
+                            <span style={{ fontSize: "28px", display: "block", marginBottom: "8px" }}>📁</span>
                             <p style={{ fontSize: "12px", color: "var(--text-muted)" }}>
-                                PDFがありません
+                                ドキュメントがありません
+                            </p>
+                            <p style={{ fontSize: "10px", color: "var(--text-muted)", marginTop: "4px" }}>
+                                PDF / Word / テキスト対応
                             </p>
                         </div>
                     ) : (
                         <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                            {pdfFiles.map((pdf) => (
+                            {docFiles.map((doc) => (
                                 <button
-                                    key={pdf.id}
+                                    key={doc.id}
                                     className="audio-item"
-                                    onClick={() => handleSelectPdf(pdf)}
+                                    onClick={() => handleSelectDoc(doc)}
                                     style={{ textAlign: "left" }}
                                 >
-                                    <span style={{ fontSize: "16px" }}>📄</span>
+                                    <span style={{ fontSize: "16px" }}>{getIcon(doc.mimeType)}</span>
                                     <div style={{ flex: 1, overflow: "hidden" }}>
                                         <p style={{
                                             fontSize: "13px",
@@ -276,7 +285,7 @@ export default function PdfPanel({
                                             textOverflow: "ellipsis",
                                             whiteSpace: "nowrap",
                                         }}>
-                                            {pdf.name}
+                                            {doc.name}
                                         </p>
                                     </div>
                                 </button>

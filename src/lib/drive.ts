@@ -102,16 +102,16 @@ export async function listAudioFiles(
 }
 
 /**
- * 指定フォルダ内のPDFファイル一覧を取得
+ * 指定フォルダ内のドキュメントファイル一覧を取得（PDF, Word, テキスト）
  */
-export async function listPdfFiles(
+export async function listDocumentFiles(
     accessToken: string,
     folderId: string
 ): Promise<drive_v3.Schema$File[]> {
     const drive = getDriveClient(accessToken);
 
     const res = await drive.files.list({
-        q: `'${folderId}' in parents and mimeType='application/pdf' and trashed=false`,
+        q: `'${folderId}' in parents and (mimeType='application/pdf' or mimeType='application/vnd.openxmlformats-officedocument.wordprocessingml.document' or mimeType='application/msword' or mimeType='text/plain') and trashed=false`,
         fields: "files(id, name, createdTime, mimeType)",
         orderBy: "createdTime desc",
         spaces: "drive",
