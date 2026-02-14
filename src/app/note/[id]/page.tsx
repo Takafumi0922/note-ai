@@ -8,6 +8,7 @@ import AudioPanel from "@/components/AudioPanel";
 import SummaryPanel from "@/components/SummaryPanel";
 import TextEditor from "@/components/TextEditor";
 import DrawingCanvas, { DrawingCanvasHandle } from "@/components/DrawingCanvas";
+import PdfPanel from "@/components/PdfPanel";
 import { getNoteData, saveNote, getNoteTags, saveNoteTags } from "@/app/actions";
 
 export default function NotePage() {
@@ -168,6 +169,26 @@ export default function NotePage() {
         setActiveTab("text");
     };
 
+    // PDFテキストをAI要約
+    const handleSummarizePdfText = async (text: string) => {
+        try {
+            const res = await fetch("/api/summarize", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ text, type: "pdf" }),
+            });
+            if (!res.ok) {
+                const data = await res.json();
+                throw new Error(data.error || "要約に失敗しました");
+            }
+            const data = await res.json();
+            setSummaryText(data.summary);
+        } catch (error) {
+            console.error("PDF要約エラー:", error);
+            alert(error instanceof Error ? error.message : "PDF要約に失敗しました");
+        }
+    };
+
     // タグ追加
     const handleAddTag = () => {
         const t = tagInput.trim();
@@ -323,6 +344,14 @@ export default function NotePage() {
                             onSummaryChange={setSummaryText}
                             selectedAudioId={selectedAudioId}
                             onInsertToNote={handleInsertToNote}
+                        />
+                    </div>
+
+                    <div style={{ flex: 1, minHeight: 0 }}>
+                        <PdfPanel
+                            folderId={folderId}
+                            onInsertToNote={handleInsertToNote}
+                            onSummarizeText={handleSummarizePdfText}
                         />
                     </div>
                 </div>

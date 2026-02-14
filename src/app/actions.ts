@@ -195,3 +195,41 @@ export async function saveNoteTags(folderId: string, tags: string[]) {
     await uploadFile(token, folderId, "tags.json", "application/json", JSON.stringify(tags));
     return { success: true };
 }
+
+/**
+ * PDFファイルをアップロード
+ */
+export async function uploadPdf(folderId: string, fileName: string, base64Data: string) {
+    const token = await getAccessToken();
+    // Base64からBufferに変換
+    const buffer = Buffer.from(base64Data, "base64");
+    await uploadFile(token, folderId, fileName, "application/pdf", buffer);
+    return { success: true };
+}
+
+/**
+ * PDFファイル一覧を取得
+ */
+export async function getPdfFiles(folderId: string) {
+    const token = await getAccessToken();
+    const { listPdfFiles } = await import("@/lib/drive");
+    const files = await listPdfFiles(token, folderId);
+    return files.map((f) => ({
+        id: f.id!,
+        name: f.name!,
+        createdTime: f.createdTime || "",
+    }));
+}
+
+/**
+ * PDFからテキストを抽出
+ */
+export async function extractPdfText(fileId: string) {
+    const token = await getAccessToken();
+    const { downloadFile } = await import("@/lib/drive");
+    const buffer = await downloadFile(token, fileId);
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const pdfParse = require("pdf-parse");
+    const data = await pdfParse(buffer);
+    return data.text;
+}

@@ -15,33 +15,50 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: "認証されていません" }, { status: 401 });
         }
 
-        const { fileId } = await request.json();
-        if (!fileId) {
-            return NextResponse.json(
-                { error: "ファイルIDが必要です" },
-                { status: 400 }
-            );
-        }
+        const body = await request.json();
+        const { type } = body;
 
-        // Google Drive から音声ファイルをダウンロード
-        const audioBuffer = await downloadFile(session.accessToken, fileId);
-        const base64Audio = audioBuffer.toString("base64");
-
-        // Gemini API で要約
+        // Gemini API 準備
         const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
         const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-        const result = await model.generateContent([
-            {
-                inlineData: {
-                    mimeType: "audio/webm",
-                    data: base64Audio,
+        let result;
+
+        if (type === "pdf") {
+            // PDFテキスト要約
+            const { text } = body;
+            if (!text) {
+                return NextResponse.json({ error: "テキストが必要です" }, { status: 400 });
+            }
+
+            result = await model.generateContent([
+                {
+                    text: `以下のPDF文書のテキストを詳細に要約してください。重要なポイントを箇条書きで出力すること。日本語で回答してください。\n\n---\n${text}`,
                 },
-            },
-            {
-                text: "以下の音声を詳細に要約してください。重要なポイントを箇条書きで出力すること。日本語で回答してください。",
-            },
-        ]);
+            ]);
+        } else {
+            // 音声ファイル要約（従来の処理）
+            const { fileId } = body;
+            if (!fileId) {
+                return NextResponse.json({ error: "ファイルIDが必要です" }, { status: 400 });
+            }
+
+            // Google Drive から音声ファイルをダウンロード
+            const audioBuffer = await downloadFile(session.accessToken, fileId);
+            const base64Audio = audioBuffer.toString("base64");
+
+            result = await model.generateContent([
+                {
+                    inlineData: {
+                        mimeType: "audio/webm",
+                        data: base64Audio,
+                    },
+                },
+                {
+                    text: "以下の音声を詳細に要約してください。重要なポイントを箇条書きで出力すること。日本語で回答してください。",
+                },
+            ]);
+        }
 
         const response = await result.response;
         const summaryText = response.text();
