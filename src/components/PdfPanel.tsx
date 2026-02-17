@@ -33,7 +33,7 @@ interface DocFile {
 interface PdfPanelProps {
     folderId: string;
     onInsertToNote: (text: string) => void;
-    onSummarizeText: (text: string) => void;
+    onSummarizeText: (text: string, customPrompt?: string) => void;
 }
 
 export default function PdfPanel({
@@ -47,6 +47,7 @@ export default function PdfPanel({
     const [selectedDoc, setSelectedDoc] = useState<DocFile | null>(null);
     const [docText, setDocText] = useState("");
     const [isExtracting, setIsExtracting] = useState(false);
+    const [customPrompt, setCustomPrompt] = useState("");
     const fileInputRef = useRef<HTMLInputElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -216,13 +217,38 @@ export default function PdfPanel({
                                 }}
                             />
 
+                            {/* カスタム指示入力欄 */}
+                            <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                                <input
+                                    type="text"
+                                    value={customPrompt}
+                                    onChange={(e) => setCustomPrompt(e.target.value)}
+                                    placeholder="追加指示（例: 質問を考えて）"
+                                    style={{
+                                        flex: 1,
+                                        padding: "6px 10px",
+                                        borderRadius: "6px",
+                                        border: "1px solid var(--border-color)",
+                                        background: "var(--bg-primary)",
+                                        color: "var(--text-primary)",
+                                        fontSize: "11px",
+                                        outline: "none",
+                                    }}
+                                    onKeyDown={(e) => {
+                                        if (e.key === "Enter" && docText.trim()) {
+                                            onSummarizeText(docText, customPrompt || undefined);
+                                        }
+                                    }}
+                                />
+                            </div>
+
                             <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
                                 <button
                                     className="btn-secondary"
-                                    onClick={() => docText.trim() && onSummarizeText(docText)}
+                                    onClick={() => docText.trim() && onSummarizeText(docText, customPrompt || undefined)}
                                     style={{ flex: 1, fontSize: "11px", padding: "6px 8px" }}
                                 >
-                                    🤖 AI要約
+                                    {customPrompt.trim() ? "🤖 AI要約 + 指示" : "🤖 AI要約"}
                                 </button>
                                 <button
                                     className="btn-secondary"

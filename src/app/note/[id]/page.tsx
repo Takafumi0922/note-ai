@@ -169,13 +169,13 @@ export default function NotePage() {
         setActiveTab("text");
     };
 
-    // PDFテキストをAI要約
-    const handleSummarizePdfText = async (text: string) => {
+    // ドキュメントテキストをAI要約（カスタム指示対応）
+    const handleSummarizePdfText = async (text: string, customPrompt?: string) => {
         try {
             const res = await fetch("/api/summarize", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ text, type: "pdf" }),
+                body: JSON.stringify({ text, type: "pdf", customPrompt }),
             });
             if (!res.ok) {
                 const data = await res.json();
@@ -184,8 +184,8 @@ export default function NotePage() {
             const data = await res.json();
             setSummaryText(data.summary);
         } catch (error) {
-            console.error("PDF要約エラー:", error);
-            alert(error instanceof Error ? error.message : "PDF要約に失敗しました");
+            console.error("ドキュメント要約エラー:", error);
+            alert(error instanceof Error ? error.message : "要約に失敗しました");
         }
     };
 

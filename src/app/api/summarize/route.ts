@@ -25,15 +25,21 @@ export async function POST(request: NextRequest) {
         let result;
 
         if (type === "pdf") {
-            // PDFテキスト要約
-            const { text } = body;
+            // ドキュメントテキスト要約（カスタム指示対応）
+            const { text, customPrompt } = body;
             if (!text) {
                 return NextResponse.json({ error: "テキストが必要です" }, { status: 400 });
             }
 
+            // カスタム指示がある場合は追加
+            const baseInstruction = "以下の文書テキストを詳細に要約してください。重要なポイントを箇条書きで出力すること。日本語で回答してください。";
+            const instruction = customPrompt
+                ? `${baseInstruction}\n\nまた、以下の追加指示にも対応してください:\n${customPrompt}`
+                : baseInstruction;
+
             result = await model.generateContent([
                 {
-                    text: `以下のPDF文書のテキストを詳細に要約してください。重要なポイントを箇条書きで出力すること。日本語で回答してください。\n\n---\n${text}`,
+                    text: `${instruction}\n\n---\n${text}`,
                 },
             ]);
         } else {
