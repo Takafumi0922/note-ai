@@ -9,6 +9,7 @@ import SummaryPanel from "@/components/SummaryPanel";
 import TextEditor from "@/components/TextEditor";
 import DrawingCanvas, { DrawingCanvasHandle } from "@/components/DrawingCanvas";
 import PdfPanel from "@/components/PdfPanel";
+import AiResultModal from "@/components/AiResultModal";
 import { getNoteData, saveNote, getNoteTags, saveNoteTags } from "@/app/actions";
 
 export default function NotePage() {
@@ -28,6 +29,9 @@ export default function NotePage() {
     const [autoSaveStatus, setAutoSaveStatus] = useState<"" | "saving" | "saved">("");
     const [tags, setTags] = useState<string[]>([]);
     const [tagInput, setTagInput] = useState("");
+    const [aiModalOpen, setAiModalOpen] = useState(false);
+    const [aiModalLoading, setAiModalLoading] = useState(false);
+    const [aiModalResult, setAiModalResult] = useState("");
     const canvasRef = useRef<DrawingCanvasHandle>(null);
     const pendingSketchRef = useRef<string | null>(null);
     const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -169,8 +173,11 @@ export default function NotePage() {
         setActiveTab("text");
     };
 
-    // ドキュメントテキストをAI要約（カスタム指示対応）
+    // ドキュメントテキストをAI要約（モーダル表示＋カスタム指示対応）
     const handleSummarizePdfText = async (text: string, customPrompt?: string) => {
+        setAiModalOpen(true);
+        setAiModalLoading(true);
+        setAiModalResult("");
         try {
             const res = await fetch("/api/summarize", {
                 method: "POST",
@@ -182,10 +189,13 @@ export default function NotePage() {
                 throw new Error(data.error || "要約に失敗しました");
             }
             const data = await res.json();
+            setAiModalResult(data.summary);
             setSummaryText(data.summary);
         } catch (error) {
             console.error("ドキュメント要約エラー:", error);
-            alert(error instanceof Error ? error.message : "要約に失敗しました");
+            setAiModalResult(error instanceof Error ? `エラー: ${error.message}` : "要約に失敗しました");
+        } finally {
+            setAiModalLoading(false);
         }
     };
 
@@ -399,6 +409,15 @@ export default function NotePage() {
                     </div>
                 </div>
             </div>
+
+            {/* AI結果モーダル */}
+            <AiResultModal
+                isOpen={aiModalOpen}
+                isLoading={aiModalLoading}
+                resultText={aiModalResult}
+                onClose={() => setAiModalOpen(false)}
+                onInsertToNote={handleInsertToNote}
+            />
         </div>
     );
 }
