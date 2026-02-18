@@ -400,32 +400,32 @@ export default function NotePage() {
                         })}
                     </div>
 
-                    {/* タブコンテンツ */}
-                    <div style={{ flex: 1, overflow: "hidden", padding: "12px" }}>
-                        {leftTab === "audio" && (
+                    {/* タブコンテンツ: 常にマウントしてdisplayで切り替え（録音継続のため）*/}
+                    <div style={{ flex: 1, overflow: "hidden", padding: "12px", position: "relative" }}>
+                        <div style={{ height: "100%", display: leftTab === "audio" ? "block" : "none" }}>
                             <AudioPanel
                                 folderId={folderId}
                                 selectedAudioId={selectedAudioId}
                                 onSelectAudio={setSelectedAudioId}
                             />
-                        )}
-                        {leftTab === "summary" && (
+                        </div>
+                        <div style={{ height: "100%", display: leftTab === "summary" ? "flex" : "none", flexDirection: "column" }}>
                             <SummaryPanel
                                 summaryText={summaryText}
                                 onSummaryChange={setSummaryText}
                                 selectedAudioId={selectedAudioId}
                                 onInsertToNote={handleInsertToNote}
                                 aiHistory={aiHistory}
-                                onSelectHistory={(text) => setSummaryText(text)}
+                                onSelectHistory={(text: string) => setSummaryText(text)}
                             />
-                        )}
-                        {leftTab === "doc" && (
+                        </div>
+                        <div style={{ height: "100%", display: leftTab === "doc" ? "block" : "none" }}>
                             <PdfPanel
                                 folderId={folderId}
                                 onInsertToNote={handleInsertToNote}
                                 onSummarizeText={handleSummarizePdfText}
                             />
-                        )}
+                        </div>
                     </div>
                 </div>
 
