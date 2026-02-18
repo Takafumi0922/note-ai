@@ -29,9 +29,11 @@ export default function NotePage() {
     const [autoSaveStatus, setAutoSaveStatus] = useState<"" | "saving" | "saved">("");
     const [tags, setTags] = useState<string[]>([]);
     const [tagInput, setTagInput] = useState("");
+    const [leftTab, setLeftTab] = useState<"audio" | "summary" | "doc">("audio");
     const [aiModalOpen, setAiModalOpen] = useState(false);
     const [aiModalLoading, setAiModalLoading] = useState(false);
     const [aiModalResult, setAiModalResult] = useState("");
+    const [aiHistory, setAiHistory] = useState<{ id: string; timestamp: string; label: string; text: string }[]>([]);
     const canvasRef = useRef<DrawingCanvasHandle>(null);
     const pendingSketchRef = useRef<string | null>(null);
     const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -191,6 +193,19 @@ export default function NotePage() {
             const data = await res.json();
             setAiModalResult(data.summary);
             setSummaryText(data.summary);
+            // 履歴に追加
+            const label = customPrompt ? `要約+「${customPrompt.slice(0, 20)}...」` : "AI要約";
+            setAiHistory((prev) => [
+                {
+                    id: Date.now().toString(),
+                    timestamp: new Date().toLocaleString("ja-JP", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }),
+                    label,
+                    text: data.summary,
+                },
+                ...prev,
+            ]);
+            // AI履歴タブへ移動
+            setLeftTab("summary");
         } catch (error) {
             console.error("ドキュメント要約エラー:", error);
             setAiModalResult(error instanceof Error ? `エラー: ${error.message}` : "要約に失敗しました");
@@ -329,40 +344,88 @@ export default function NotePage() {
                     gap: "12px",
                 }}
             >
-                {/* 左パネル (音声 + AI要約) */}
+                {/* 左パネル (タブ切り替え) */}
                 <div
+                    className="glass-card fade-in"
                     style={{
-                        width: "380px",
+                        width: "420px",
                         flexShrink: 0,
                         display: "flex",
                         flexDirection: "column",
-                        gap: "12px",
                         overflow: "hidden",
                     }}
                 >
-                    <div style={{ flex: 1, minHeight: 0 }}>
-                        <AudioPanel
-                            folderId={folderId}
-                            selectedAudioId={selectedAudioId}
-                            onSelectAudio={setSelectedAudioId}
-                        />
+                    {/* タブナビゲーション */}
+                    <div style={{
+                        display: "flex",
+                        borderBottom: "1px solid var(--border-color)",
+                        background: "var(--bg-secondary)",
+                    }}>
+                        {(["audio", "summary", "doc"] as const).map((tab) => {
+                            const labels: Record<string, string> = { audio: "🎵 録音", summary: "🤖 AI", doc: "📁 資料" };
+                            const isActive = leftTab === tab;
+                            return (
+                                <button
+                                    key={tab}
+                                    onClick={() => setLeftTab(tab)}
+                                    style={{
+                                        flex: 1,
+                                        padding: "10px 4px",
+                                        fontSize: "12px",
+                                        fontWeight: isActive ? 700 : 400,
+                                        color: isActive ? "var(--accent-primary)" : "var(--text-muted)",
+                                        background: "transparent",
+                                        border: "none",
+                                        borderBottom: isActive ? "2px solid var(--accent-primary)" : "2px solid transparent",
+                                        cursor: "pointer",
+                                        transition: "all 0.2s ease",
+                                        marginBottom: "-1px",
+                                    }}
+                                >
+                                    {labels[tab]}
+                                    {tab === "summary" && aiHistory.length > 0 && (
+                                        <span style={{
+                                            marginLeft: "4px",
+                                            background: "var(--accent-primary)",
+                                            color: "white",
+                                            borderRadius: "10px",
+                                            fontSize: "10px",
+                                            padding: "1px 5px",
+                                        }}>
+                                            {aiHistory.length}
+                                        </span>
+                                    )}
+                                </button>
+                            );
+                        })}
                     </div>
 
-                    <div style={{ flex: 1, minHeight: 0 }}>
-                        <SummaryPanel
-                            summaryText={summaryText}
-                            onSummaryChange={setSummaryText}
-                            selectedAudioId={selectedAudioId}
-                            onInsertToNote={handleInsertToNote}
-                        />
-                    </div>
-
-                    <div style={{ flex: 1, minHeight: 0 }}>
-                        <PdfPanel
-                            folderId={folderId}
-                            onInsertToNote={handleInsertToNote}
-                            onSummarizeText={handleSummarizePdfText}
-                        />
+                    {/* タブコンテンツ */}
+                    <div style={{ flex: 1, overflow: "hidden", padding: "12px" }}>
+                        {leftTab === "audio" && (
+                            <AudioPanel
+                                folderId={folderId}
+                                selectedAudioId={selectedAudioId}
+                                onSelectAudio={setSelectedAudioId}
+                            />
+                        )}
+                        {leftTab === "summary" && (
+                            <SummaryPanel
+                                summaryText={summaryText}
+                                onSummaryChange={setSummaryText}
+                                selectedAudioId={selectedAudioId}
+                                onInsertToNote={handleInsertToNote}
+                                aiHistory={aiHistory}
+                                onSelectHistory={(text) => setSummaryText(text)}
+                            />
+                        )}
+                        {leftTab === "doc" && (
+                            <PdfPanel
+                                folderId={folderId}
+                                onInsertToNote={handleInsertToNote}
+                                onSummarizeText={handleSummarizePdfText}
+                            />
+                        )}
                     </div>
                 </div>
 

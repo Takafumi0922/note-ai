@@ -2,11 +2,20 @@
 
 import { useState, useRef } from "react";
 
+interface AiHistoryItem {
+    id: string;
+    timestamp: string;
+    label: string;
+    text: string;
+}
+
 interface SummaryPanelProps {
     summaryText: string;
     onSummaryChange: (text: string) => void;
     selectedAudioId: string | null;
     onInsertToNote?: (text: string) => void;
+    aiHistory?: AiHistoryItem[];
+    onSelectHistory?: (text: string) => void;
 }
 
 export default function SummaryPanel({
@@ -14,11 +23,15 @@ export default function SummaryPanel({
     onSummaryChange,
     selectedAudioId,
     onInsertToNote,
+    aiHistory = [],
+    onSelectHistory,
 }: SummaryPanelProps) {
     const [isLoading, setIsLoading] = useState(false);
+    const [innerTab, setInnerTab] = useState<"current" | "history">("current");
+    const [expandedId, setExpandedId] = useState<string | null>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-    // AI要約を実行
+    // AI音声要約を実行
     const handleSummarize = async () => {
         if (!selectedAudioId) {
             alert("要約する音声ファイルを選択してください。");
@@ -71,110 +84,222 @@ export default function SummaryPanel({
 
     return (
         <div
-            className="glass-card fade-in"
             style={{
                 display: "flex",
                 flexDirection: "column",
                 height: "100%",
-                padding: "16px",
-                gap: "12px",
+                gap: "10px",
             }}
         >
-            {/* タイトルと要約ボタン */}
-            <div
-                style={{
+            {/* 内部タブ: 現在の要約 / 履歴 */}
+            <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                <div style={{
                     display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    paddingBottom: "8px",
-                    borderBottom: "1px solid var(--border-color)",
-                }}
-            >
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <span style={{ fontSize: "18px" }}>✨</span>
-                    <h3
-                        style={{
-                            fontSize: "14px",
-                            fontWeight: 600,
-                            color: "var(--text-secondary)",
-                        }}
-                    >
-                        AI要約
-                    </h3>
+                    background: "var(--bg-secondary)",
+                    borderRadius: "8px",
+                    padding: "3px",
+                    gap: "2px",
+                    flex: 1,
+                }}>
+                    {(["current", "history"] as const).map((t) => (
+                        <button
+                            key={t}
+                            onClick={() => setInnerTab(t)}
+                            style={{
+                                flex: 1,
+                                padding: "5px 8px",
+                                fontSize: "11px",
+                                fontWeight: innerTab === t ? 700 : 400,
+                                color: innerTab === t ? "white" : "var(--text-muted)",
+                                background: innerTab === t ? "var(--accent-primary)" : "transparent",
+                                border: "none",
+                                borderRadius: "6px",
+                                cursor: "pointer",
+                                transition: "all 0.2s",
+                            }}
+                        >
+                            {t === "current" ? "✨ 現在の要約" : `🕐 履歴${aiHistory.length > 0 ? ` (${aiHistory.length})` : ""}`}
+                        </button>
+                    ))}
                 </div>
 
+                {/* 音声要約ボタン */}
                 <button
                     className="btn-primary"
                     onClick={handleSummarize}
                     disabled={isLoading || !selectedAudioId}
                     style={{
-                        padding: "8px 16px",
-                        fontSize: "13px",
+                        padding: "6px 12px",
+                        fontSize: "12px",
                         display: "flex",
                         alignItems: "center",
-                        gap: "6px",
+                        gap: "4px",
+                        whiteSpace: "nowrap",
                     }}
                 >
                     {isLoading ? (
-                        <>
-                            <span className="spinner" /> 要約中...
-                        </>
+                        <><span className="spinner" style={{ width: "12px", height: "12px" }} /> 要約中</>
                     ) : (
-                        <>🤖 要約実行</>
+                        <>🎙️ 要約</>
                     )}
                 </button>
             </div>
 
-            {/* 要約選択状態の表示 */}
-            {!selectedAudioId && (
-                <p
-                    style={{
-                        fontSize: "12px",
-                        color: "var(--warning)",
-                        textAlign: "center",
-                        padding: "4px",
-                        background: "rgba(245, 158, 11, 0.1)",
-                        borderRadius: "6px",
-                    }}
-                >
-                    ⚠️ 音声ファイルを選択してください
-                </p>
+            {/* 現在の要約タブ */}
+            {innerTab === "current" && (
+                <>
+                    {!selectedAudioId && (
+                        <p style={{
+                            fontSize: "11px",
+                            color: "var(--warning)",
+                            textAlign: "center",
+                            padding: "4px",
+                            background: "rgba(245, 158, 11, 0.1)",
+                            borderRadius: "6px",
+                        }}>
+                            ⚠️ 音声ファイルを選択してください
+                        </p>
+                    )}
+
+                    <textarea
+                        ref={textareaRef}
+                        className="editor-textarea"
+                        value={summaryText}
+                        onChange={(e) => onSummaryChange(e.target.value)}
+                        placeholder="要約結果がここに表示されます..."
+                        style={{
+                            flex: 1,
+                            borderRadius: "10px",
+                            background: "var(--bg-secondary)",
+                            border: "1px solid var(--border-color)",
+                            fontSize: "13px",
+                            lineHeight: 1.7,
+                        }}
+                    />
+
+                    {onInsertToNote && summaryText.trim() && (
+                        <div style={{ display: "flex", gap: "6px" }}>
+                            <button
+                                className="btn-secondary"
+                                onClick={handleInsertAll}
+                                style={{ flex: 1, fontSize: "11px", padding: "6px 8px" }}
+                            >
+                                📋 全文追加
+                            </button>
+                            <button
+                                className="btn-secondary"
+                                onClick={handleInsertSelection}
+                                style={{ flex: 1, fontSize: "11px", padding: "6px 8px" }}
+                            >
+                                ✂️ 選択追加
+                            </button>
+                        </div>
+                    )}
+                </>
             )}
 
-            {/* 要約テキストエリア */}
-            <textarea
-                ref={textareaRef}
-                className="editor-textarea"
-                value={summaryText}
-                onChange={(e) => onSummaryChange(e.target.value)}
-                placeholder="要約結果がここに表示されます..."
-                style={{
-                    flex: 1,
-                    borderRadius: "10px",
-                    background: "var(--bg-secondary)",
-                    border: "1px solid var(--border-color)",
-                    fontSize: "14px",
-                    lineHeight: 1.7,
-                }}
-            />
+            {/* 履歴タブ */}
+            {innerTab === "history" && (
+                <div style={{ flex: 1, overflow: "auto", display: "flex", flexDirection: "column", gap: "6px" }}>
+                    {aiHistory.length === 0 ? (
+                        <div style={{ textAlign: "center", paddingTop: "40px" }}>
+                            <span style={{ fontSize: "28px", display: "block", marginBottom: "8px" }}>🤖</span>
+                            <p style={{ fontSize: "12px", color: "var(--text-muted)" }}>AI返答の履歴がありません</p>
+                            <p style={{ fontSize: "10px", color: "var(--text-muted)", marginTop: "4px" }}>ドキュメントのAI要約を実行すると履歴が残ります</p>
+                        </div>
+                    ) : (
+                        aiHistory.map((item) => (
+                            <div
+                                key={item.id}
+                                style={{
+                                    border: "1px solid var(--border-color)",
+                                    borderRadius: "8px",
+                                    overflow: "hidden",
+                                    background: "var(--bg-secondary)",
+                                }}
+                            >
+                                {/* 履歴ヘッダー */}
+                                <button
+                                    onClick={() => setExpandedId(expandedId === item.id ? null : item.id)}
+                                    style={{
+                                        width: "100%",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "space-between",
+                                        padding: "8px 10px",
+                                        background: "transparent",
+                                        border: "none",
+                                        cursor: "pointer",
+                                        textAlign: "left",
+                                        gap: "6px",
+                                    }}
+                                >
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                        <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--accent-primary)" }}>
+                                            {item.label}
+                                        </span>
+                                        <span style={{ fontSize: "10px", color: "var(--text-muted)", marginLeft: "6px" }}>
+                                            {item.timestamp}
+                                        </span>
+                                        {expandedId !== item.id && (
+                                            <p style={{
+                                                fontSize: "11px",
+                                                color: "var(--text-muted)",
+                                                marginTop: "2px",
+                                                overflow: "hidden",
+                                                textOverflow: "ellipsis",
+                                                whiteSpace: "nowrap",
+                                            }}>
+                                                {item.text.slice(0, 60)}...
+                                            </p>
+                                        )}
+                                    </div>
+                                    <span style={{ fontSize: "10px", color: "var(--text-muted)", flexShrink: 0 }}>
+                                        {expandedId === item.id ? "▲" : "▼"}
+                                    </span>
+                                </button>
 
-            {/* ノートへ追加ボタン */}
-            {onInsertToNote && summaryText.trim() && (
-                <div style={{ display: "flex", gap: "8px" }}>
-                    <button
-                        className="btn-secondary"
-                        onClick={handleInsertAll}
-                        style={{ flex: 1, fontSize: "12px", padding: "8px 12px" }}
-                    >
-                        📋 全文追加
-                    </button>
-                    <button
-                        className="btn-secondary"
-                        onClick={handleInsertSelection}
-                        style={{ flex: 1, fontSize: "12px", padding: "8px 12px" }}
-                    >
-                        ✂️ 選択追加
-                    </button>
+                                {/* 展開時のコンテンツ */}
+                                {expandedId === item.id && (
+                                    <div style={{ padding: "0 10px 10px" }}>
+                                        <p style={{
+                                            fontSize: "12px",
+                                            lineHeight: 1.7,
+                                            color: "var(--text-primary)",
+                                            whiteSpace: "pre-wrap",
+                                            maxHeight: "200px",
+                                            overflow: "auto",
+                                            padding: "8px",
+                                            background: "var(--bg-primary)",
+                                            borderRadius: "6px",
+                                            marginBottom: "6px",
+                                        }}>
+                                            {item.text}
+                                        </p>
+                                        <div style={{ display: "flex", gap: "4px" }}>
+                                            <button
+                                                className="btn-secondary"
+                                                onClick={() => {
+                                                    onSelectHistory?.(item.text);
+                                                    setInnerTab("current");
+                                                }}
+                                                style={{ flex: 1, fontSize: "10px", padding: "4px 6px" }}
+                                            >
+                                                📌 現在にセット
+                                            </button>
+                                            <button
+                                                className="btn-secondary"
+                                                onClick={() => onInsertToNote?.(item.text)}
+                                                style={{ flex: 1, fontSize: "10px", padding: "4px 6px" }}
+                                            >
+                                                📋 ノートに追加
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        ))
+                    )}
                 </div>
             )}
         </div>
