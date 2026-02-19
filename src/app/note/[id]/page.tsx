@@ -171,7 +171,7 @@ export default function NotePage() {
 
     // 要約テキストをノートに挿入
     const handleInsertToNote = (text: string) => {
-        setNoteText((prev) => prev ? prev + "\n\n---\n\n" + text : text);
+        setNoteText((prev) => prev ? prev + "\n" + text : text);
         setActiveTab("text");
     };
 
