@@ -17,6 +17,7 @@ interface SummaryPanelProps {
     aiHistory?: AiHistoryItem[];
     onSelectHistory?: (text: string) => void;
     onAddHistory?: (text: string, label: string) => void;
+    model?: string;
 }
 
 export default function SummaryPanel({
@@ -27,6 +28,7 @@ export default function SummaryPanel({
     aiHistory = [],
     onSelectHistory,
     onAddHistory,
+    model = "gemini-2.5-flash",
 }: SummaryPanelProps) {
     const [isLoading, setIsLoading] = useState(false);
     const [innerTab, setInnerTab] = useState<"current" | "history">("current");
@@ -45,7 +47,7 @@ export default function SummaryPanel({
             const res = await fetch("/api/summarize", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ fileId: selectedAudioId }),
+                body: JSON.stringify({ fileId: selectedAudioId, model }),
             });
 
             if (!res.ok) {
