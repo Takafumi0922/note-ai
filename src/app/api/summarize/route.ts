@@ -18,17 +18,9 @@ export async function POST(request: NextRequest) {
         const body = await request.json();
         const { type } = body;
 
-        // リクエストで指定されたモデル（不正な値はflashにフォールバック）
-        const ALLOWED_MODELS = ["gemini-2.5-flash", "gemini-2.5-pro"] as const;
-        type AllowedModel = typeof ALLOWED_MODELS[number];
-        const requestedModel = body.model as string;
-        const selectedModel: AllowedModel = ALLOWED_MODELS.includes(requestedModel as AllowedModel)
-            ? (requestedModel as AllowedModel)
-            : "gemini-2.5-flash";
-
-        // Gemini API 準備
+        // Gemini API 準備（gemini-2.5-flash 固定）
         const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-        const model = genAI.getGenerativeModel({ model: selectedModel });
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
         let result;
 

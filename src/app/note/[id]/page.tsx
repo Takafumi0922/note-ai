@@ -30,7 +30,6 @@ export default function NotePage() {
     const [tags, setTags] = useState<string[]>([]);
     const [tagInput, setTagInput] = useState("");
     const [leftTab, setLeftTab] = useState<"audio" | "summary" | "doc">("audio");
-    const [aiModel, setAiModel] = useState<"gemini-2.5-flash" | "gemini-2.5-pro">("gemini-2.5-flash");
     const [aiModalOpen, setAiModalOpen] = useState(false);
     const [aiModalLoading, setAiModalLoading] = useState(false);
     const [aiModalResult, setAiModalResult] = useState("");
@@ -212,7 +211,7 @@ export default function NotePage() {
             const res = await fetch("/api/summarize", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ text, type: "pdf", customPrompt, model: aiModel }),
+                body: JSON.stringify({ text, type: "pdf", customPrompt }),
             });
             if (!res.ok) {
                 const data = await res.json();
@@ -347,29 +346,6 @@ export default function NotePage() {
                     />
                 </div>
 
-                {/* AIモデル選択 */}
-                <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                    <span style={{ fontSize: "10px", color: "var(--text-muted)" }}>🤖</span>
-                    {(["gemini-2.5-flash", "gemini-2.5-pro"] as const).map((m) => (
-                        <button
-                            key={m}
-                            onClick={() => setAiModel(m)}
-                            style={{
-                                padding: "2px 8px",
-                                fontSize: "10px",
-                                borderRadius: "10px",
-                                border: aiModel === m ? "1px solid var(--accent-primary)" : "1px solid var(--border-color)",
-                                background: aiModel === m ? "rgba(99,102,241,0.15)" : "transparent",
-                                color: aiModel === m ? "var(--accent-primary)" : "var(--text-muted)",
-                                cursor: "pointer",
-                                fontWeight: aiModel === m ? 700 : 400,
-                                transition: "all 0.15s",
-                            }}
-                        >
-                            {m === "gemini-2.5-flash" ? "⚡ Flash" : "🧠 Pro"}
-                        </button>
-                    ))}
-                </div>
 
                 {/* 自動保存ステータス */}
                 <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>
@@ -462,7 +438,6 @@ export default function NotePage() {
                                 aiHistory={aiHistory}
                                 onSelectHistory={(text: string) => setSummaryText(text)}
                                 onAddHistory={addAiHistory}
-                                model={aiModel}
                             />
                         </div>
                         <div style={{ height: "100%", display: leftTab === "doc" ? "block" : "none" }}>
