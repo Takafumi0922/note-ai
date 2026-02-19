@@ -16,6 +16,7 @@ interface SummaryPanelProps {
     onInsertToNote?: (text: string) => void;
     aiHistory?: AiHistoryItem[];
     onSelectHistory?: (text: string) => void;
+    onAddHistory?: (text: string, label: string) => void;
 }
 
 export default function SummaryPanel({
@@ -25,6 +26,7 @@ export default function SummaryPanel({
     onInsertToNote,
     aiHistory = [],
     onSelectHistory,
+    onAddHistory,
 }: SummaryPanelProps) {
     const [isLoading, setIsLoading] = useState(false);
     const [innerTab, setInnerTab] = useState<"current" | "history">("current");
@@ -53,6 +55,8 @@ export default function SummaryPanel({
 
             const data = await res.json();
             onSummaryChange(data.summary);
+            // 音声要約も履歴に追加
+            onAddHistory?.(data.summary, "🎙️ 音声要約");
         } catch (error) {
             console.error("要約エラー:", error);
             alert(

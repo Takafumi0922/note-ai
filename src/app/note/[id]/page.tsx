@@ -33,11 +33,38 @@ export default function NotePage() {
     const [aiModalOpen, setAiModalOpen] = useState(false);
     const [aiModalLoading, setAiModalLoading] = useState(false);
     const [aiModalResult, setAiModalResult] = useState("");
-    const [aiHistory, setAiHistory] = useState<{ id: string; timestamp: string; label: string; text: string }[]>([]);
+    const [aiHistory, setAiHistory] = useState<{ id: string; timestamp: string; label: string; text: string }[]>(() => {
+        // localStorageからノートごとの履歴を復元
+        if (typeof window === "undefined") return [];
+        try {
+            const saved = localStorage.getItem(`ai-history-${folderId}`);
+            return saved ? JSON.parse(saved) : [];
+        } catch { return []; }
+    });
     const canvasRef = useRef<DrawingCanvasHandle>(null);
     const pendingSketchRef = useRef<string | null>(null);
     const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const isInitialLoadRef = useRef(true);
+
+    // AI履歴をlocalStorageに保存
+    useEffect(() => {
+        try {
+            localStorage.setItem(`ai-history-${folderId}`, JSON.stringify(aiHistory));
+        } catch { /* localStorage容量超過等は無視 */ }
+    }, [aiHistory, folderId]);
+
+    // AI履歴に追加する共通関数
+    const addAiHistory = (text: string, label: string) => {
+        setAiHistory((prev) => [
+            {
+                id: Date.now().toString(),
+                timestamp: new Date().toLocaleString("ja-JP", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }),
+                label,
+                text,
+            },
+            ...prev.slice(0, 49), // 最大50件保持
+        ]);
+    };
 
     // ノートデータを読み込み
     const loadNote = useCallback(async () => {
@@ -194,16 +221,8 @@ export default function NotePage() {
             setAiModalResult(data.summary);
             setSummaryText(data.summary);
             // 履歴に追加
-            const label = customPrompt ? `要約+「${customPrompt.slice(0, 20)}...」` : "AI要約";
-            setAiHistory((prev) => [
-                {
-                    id: Date.now().toString(),
-                    timestamp: new Date().toLocaleString("ja-JP", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }),
-                    label,
-                    text: data.summary,
-                },
-                ...prev,
-            ]);
+            const label = customPrompt ? `資料要約+指示「${customPrompt.slice(0, 15)}」` : "📁 資料要約";
+            addAiHistory(data.summary, label);
             // AI履歴タブへ移動
             setLeftTab("summary");
         } catch (error) {
@@ -417,6 +436,7 @@ export default function NotePage() {
                                 onInsertToNote={handleInsertToNote}
                                 aiHistory={aiHistory}
                                 onSelectHistory={(text: string) => setSummaryText(text)}
+                                onAddHistory={addAiHistory}
                             />
                         </div>
                         <div style={{ height: "100%", display: leftTab === "doc" ? "block" : "none" }}>
