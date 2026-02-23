@@ -2,7 +2,7 @@
 
 import { useSession } from "next-auth/react";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import Header from "@/components/Header";
 import AudioPanel from "@/components/AudioPanel";
 import SummaryPanel from "@/components/SummaryPanel";
@@ -15,7 +15,6 @@ import { getNoteData, saveNote, getNoteTags, saveNoteTags } from "@/app/actions"
 export default function NotePage() {
     const { data: session, status } = useSession();
     const params = useParams();
-    const router = useRouter();
     const folderId = params.id as string;
 
     // 状態管理

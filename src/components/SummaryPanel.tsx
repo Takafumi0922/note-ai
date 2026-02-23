@@ -20,6 +20,14 @@ interface SummaryPanelProps {
     model?: string;
 }
 
+// プロンプトテンプレートの定義
+const PROMPT_TEMPLATES = [
+    { label: "標準（詳細に要約）", value: "" },
+    { label: "箇条書きで短く", value: "要点を3〜5個の短い箇条書きでまとめてください。" },
+    { label: "議事録形式", value: "【日時】【参加者】【決定事項】【TODO】の見出しをつけて議事録形式でまとめてください。" },
+    { label: "結論だけ", value: "結論と最重要ポイントだけを100文字以内で端的に教えてください。" }
+];
+
 export default function SummaryPanel({
     summaryText,
     onSummaryChange,
@@ -33,9 +41,10 @@ export default function SummaryPanel({
     const [isLoading, setIsLoading] = useState(false);
     const [innerTab, setInnerTab] = useState<"current" | "history">("current");
     const [expandedId, setExpandedId] = useState<string | null>(null);
+    const [selectedTemplate, setSelectedTemplate] = useState("");
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-    // AI音声要約を実行
+    // AI音声要約を実行 (ストリーミング対応)
     const handleSummarize = async () => {
         if (!selectedAudioId) {
             alert("要約する音声ファイルを選択してください。");
@@ -43,22 +52,46 @@ export default function SummaryPanel({
         }
 
         setIsLoading(true);
+        setInnerTab("current");
+        onSummaryChange(""); // 既存のテキストをクリア
+        let accumulatedText = "";
+
         try {
             const res = await fetch("/api/summarize", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ fileId: selectedAudioId, model }),
+                body: JSON.stringify({
+                    fileId: selectedAudioId,
+                    model,
+                    customPrompt: selectedTemplate
+                }),
             });
 
             if (!res.ok) {
-                const data = await res.json();
+                const data = await res.json().catch(() => ({}));
                 throw new Error(data.error || "要約に失敗しました");
             }
 
-            const data = await res.json();
-            onSummaryChange(data.summary);
-            // 音声要約も履歴に追加
-            onAddHistory?.(data.summary, "🎙️ 音声要約");
+            if (!res.body) throw new Error("レスポンスボディがありません");
+
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                const chunk = decoder.decode(value, { stream: true });
+                accumulatedText += chunk;
+                onSummaryChange(accumulatedText);
+            }
+
+            // 要約完了後に履歴に追加
+            const labelStr = selectedTemplate
+                ? `🎙️ 音声要約 (${PROMPT_TEMPLATES.find(t => t.value === selectedTemplate)?.label})`
+                : "🎙️ 音声要約";
+            onAddHistory?.(accumulatedText, labelStr);
+
         } catch (error) {
             console.error("要約エラー:", error);
             alert(
@@ -128,28 +161,59 @@ export default function SummaryPanel({
                         </button>
                     ))}
                 </div>
-
-                {/* 音声要約ボタン */}
-                <button
-                    className="btn-primary"
-                    onClick={handleSummarize}
-                    disabled={isLoading || !selectedAudioId}
-                    style={{
-                        padding: "6px 12px",
-                        fontSize: "12px",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "4px",
-                        whiteSpace: "nowrap",
-                    }}
-                >
-                    {isLoading ? (
-                        <><span className="spinner" style={{ width: "12px", height: "12px" }} /> 要約中</>
-                    ) : (
-                        <>🎙️ 要約</>
-                    )}
-                </button>
             </div>
+
+            {/* 音声要約コントロール領域 */}
+            {innerTab === "current" && (
+                <div style={{
+                    display: "flex",
+                    gap: "6px",
+                    alignItems: "center",
+                    background: "var(--bg-secondary)",
+                    padding: "8px",
+                    borderRadius: "8px",
+                    border: "1px solid var(--border-color)"
+                }}>
+                    <select
+                        value={selectedTemplate}
+                        onChange={(e) => setSelectedTemplate(e.target.value)}
+                        disabled={isLoading}
+                        style={{
+                            flex: 1,
+                            padding: "6px",
+                            fontSize: "12px",
+                            borderRadius: "4px",
+                            border: "1px solid var(--border-color)",
+                            background: "var(--bg-primary)",
+                            color: "var(--text-primary)"
+                        }}
+                    >
+                        {PROMPT_TEMPLATES.map(t => (
+                            <option key={t.label} value={t.value}>{t.label}</option>
+                        ))}
+                    </select>
+
+                    <button
+                        className="btn-primary"
+                        onClick={handleSummarize}
+                        disabled={isLoading || !selectedAudioId}
+                        style={{
+                            padding: "6px 12px",
+                            fontSize: "12px",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "4px",
+                            whiteSpace: "nowrap",
+                        }}
+                    >
+                        {isLoading ? (
+                            <><span className="spinner" style={{ width: "12px", height: "12px" }} /> 要約中</>
+                        ) : (
+                            <>🎙️ 要約</>
+                        )}
+                    </button>
+                </div>
+            )}
 
             {/* 現在の要約タブ */}
             {innerTab === "current" && (
@@ -180,6 +244,7 @@ export default function SummaryPanel({
                             border: "1px solid var(--border-color)",
                             fontSize: "13px",
                             lineHeight: 1.7,
+                            padding: "12px",
                         }}
                     />
 

@@ -26,6 +26,7 @@ export default function AudioPanel({
     const [isUploading, setIsUploading] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [recordingTime, setRecordingTime] = useState(0);
+    const [audioUrl, setAudioUrl] = useState<string | null>(null);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const chunksRef = useRef<Blob[]>([]);
     const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -45,6 +46,17 @@ export default function AudioPanel({
     useEffect(() => {
         loadAudioFiles();
     }, [loadAudioFiles]);
+
+    // 選択された音声が変わった時に再生用URLを設定
+    useEffect(() => {
+        if (selectedAudioId) {
+            // Google Drive共有リンク（読み取り専用アクセスが必要）
+            // /api/audio-stream のようなプロキシAPIがない場合、DirectLinkを使用
+            setAudioUrl(`https://drive.google.com/uc?export=download&id=${selectedAudioId}`);
+        } else {
+            setAudioUrl(null);
+        }
+    }, [selectedAudioId]);
 
     // 録音タイマー
     useEffect(() => {
@@ -139,6 +151,9 @@ export default function AudioPanel({
             setIsUploading(false);
         }
     };
+
+    // 選択中のファイル名を取得
+    const selectedFile = audioFiles.find(f => f.id === selectedAudioId);
 
     return (
         <div
@@ -275,6 +290,17 @@ export default function AudioPanel({
                             className={`audio-item ${selectedAudioId === file.id ? "selected" : ""
                                 }`}
                             onClick={() => onSelectAudio(file.id)}
+                            style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "8px",
+                                padding: "8px",
+                                borderRadius: "8px",
+                                cursor: "pointer",
+                                transition: "all 0.2s",
+                                background: selectedAudioId === file.id ? "rgba(99, 102, 241, 0.1)" : "transparent",
+                                border: `1px solid ${selectedAudioId === file.id ? "var(--accent-primary)" : "transparent"}`
+                            }}
                         >
                             <span style={{ fontSize: "16px" }}>🎵</span>
                             <div style={{ flex: 1, minWidth: 0 }}>
@@ -285,6 +311,7 @@ export default function AudioPanel({
                                         overflow: "hidden",
                                         textOverflow: "ellipsis",
                                         whiteSpace: "nowrap",
+                                        color: selectedAudioId === file.id ? "var(--accent-primary)" : "var(--text-primary)"
                                     }}
                                 >
                                     {file.name}
@@ -294,6 +321,33 @@ export default function AudioPanel({
                     ))
                 )}
             </div>
+
+            {/* 音声プレイヤー */}
+            {selectedAudioId && audioUrl && (
+                <div style={{
+                    marginTop: "auto",
+                    paddingTop: "12px",
+                    borderTop: "1px solid var(--border-color)",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "8px"
+                }}>
+                    <p style={{
+                        fontSize: "11px",
+                        color: "var(--text-secondary)",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap"
+                    }}>
+                        再生中: {selectedFile?.name || "音声ファイル"}
+                    </p>
+                    <audio
+                        controls
+                        src={audioUrl}
+                        style={{ width: "100%", height: "36px", outline: "none" }}
+                    />
+                </div>
+            )}
         </div>
     );
 }
