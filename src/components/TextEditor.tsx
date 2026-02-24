@@ -8,6 +8,7 @@ import rehypeRaw from "rehype-raw";
 interface TextEditorProps {
     content: string;
     onChange: (content: string) => void;
+    folderId?: string;
 }
 
 // よく使う文字色パレット
@@ -24,7 +25,7 @@ const COLOR_PALETTE = [
     { color: "#ffffff", label: "白", border: true },
 ];
 
-export default function TextEditor({ content, onChange }: TextEditorProps) {
+export default function TextEditor({ content, onChange, folderId }: TextEditorProps) {
     const [viewMode, setViewMode] = useState<"edit" | "preview" | "split">("edit");
     const [showColorPicker, setShowColorPicker] = useState(false);
     const [customColor, setCustomColor] = useState("#ff6b6b");
@@ -131,6 +132,9 @@ export default function TextEditor({ content, onChange }: TextEditorProps) {
         try {
             const formData = new FormData();
             formData.append("file", file);
+            if (folderId) {
+                formData.append("folderId", folderId);
+            }
 
             const res = await fetch("/api/upload-image", {
                 method: "POST",
@@ -175,6 +179,9 @@ export default function TextEditor({ content, onChange }: TextEditorProps) {
         try {
             const formData = new FormData();
             formData.append("file", file);
+            if (folderId) {
+                formData.append("folderId", folderId);
+            }
 
             const res = await fetch("/api/upload-image", {
                 method: "POST",
@@ -413,11 +420,12 @@ export default function TextEditor({ content, onChange }: TextEditorProps) {
                         className={`btn-icon ${viewMode === 'edit' ? 'active' : ''}`}
                         onClick={() => setViewMode('edit')}
                         style={{
-                            padding: "6px 10px",
-                            fontSize: "12px",
+                            padding: "6px 12px",
+                            fontSize: "13px",
                             borderRadius: 0,
                             background: viewMode === 'edit' ? "var(--accent-primary)" : "transparent",
                             color: viewMode === 'edit' ? "white" : "var(--text-muted)",
+                            whiteSpace: "nowrap",
                         }}
                     >
                         編集
@@ -426,13 +434,14 @@ export default function TextEditor({ content, onChange }: TextEditorProps) {
                         className={`btn-icon ${viewMode === 'preview' ? 'active' : ''}`}
                         onClick={() => setViewMode('preview')}
                         style={{
-                            padding: "6px 10px",
-                            fontSize: "12px",
+                            padding: "6px 12px",
+                            fontSize: "13px",
                             borderRadius: 0,
                             borderLeft: "1px solid var(--border-color)",
                             borderRight: "1px solid var(--border-color)",
                             background: viewMode === 'preview' ? "var(--accent-primary)" : "transparent",
                             color: viewMode === 'preview' ? "white" : "var(--text-muted)",
+                            whiteSpace: "nowrap",
                         }}
                     >
                         プレビュー
@@ -441,11 +450,12 @@ export default function TextEditor({ content, onChange }: TextEditorProps) {
                         className={`btn-icon ${viewMode === 'split' ? 'active' : ''}`}
                         onClick={() => setViewMode('split')}
                         style={{
-                            padding: "6px 10px",
-                            fontSize: "12px",
+                            padding: "6px 12px",
+                            fontSize: "13px",
                             borderRadius: 0,
                             background: viewMode === 'split' ? "var(--accent-primary)" : "transparent",
                             color: viewMode === 'split' ? "white" : "var(--text-muted)",
+                            whiteSpace: "nowrap",
                         }}
                     >
                         分割

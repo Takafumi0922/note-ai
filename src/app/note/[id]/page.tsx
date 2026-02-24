@@ -489,7 +489,7 @@ export default function NotePage() {
                     {/* タブコンテンツ */}
                     <div style={{ flex: 1, overflow: "hidden" }}>
                         {activeTab === "text" ? (
-                            <TextEditor content={noteText} onChange={setNoteText} />
+                            <TextEditor content={noteText} onChange={setNoteText} folderId={folderId} />
                         ) : (
                             <DrawingCanvas ref={canvasRef} />
                         )}

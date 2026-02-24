@@ -19,10 +19,10 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: "ファイルがありません" }, { status: 400 });
         }
 
-        // テンポラリのフォルダIDをアプリ全体の設定から取得する等の処理が必要ですが、
-        // 今回は単純にルートまたは専用フォルダへアップロードします。
-        // ここでは汎用的に "root" を指定していますが、適宜変更してください。
-        const parentFolderId = "root";
+        // リクエストからfolderIdを取得（なければ "root" にフォールバック）
+        const folderId = formData.get("folderId") as string | null;
+        const parentFolderId = folderId || "root";
+
 
         const auth = new google.auth.OAuth2();
         auth.setCredentials({ access_token: session.accessToken });
