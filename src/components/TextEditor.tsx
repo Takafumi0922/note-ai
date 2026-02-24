@@ -153,6 +153,52 @@ export default function TextEditor({ content, onChange }: TextEditorProps) {
         }
     };
 
+    // 画像のペースト
+    const handlePaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+        // テキストのペーストかどうかのチェック
+        const hasText = e.clipboardData.types.includes('text/plain');
+        const file = e.clipboardData.files[0];
+
+        // 画像が含まれていない場合は通常のペースト処理に任せる
+        if (!file || !file.type.startsWith("image/")) return;
+
+        // 画像ペーストの場合はデフォルトの挙動（テキストペースト）をキャンセル
+        e.preventDefault();
+
+        setIsUploading(true);
+        // 一時的にプレースホルダーを挿入
+        const placeholder = `\n![アップロード中...]()\n`;
+        const startPos = textareaRef.current?.selectionStart || content.length;
+        const newContent = content.slice(0, startPos) + placeholder + content.slice(startPos);
+        onChange(newContent);
+
+        try {
+            const formData = new FormData();
+            formData.append("file", file);
+
+            const res = await fetch("/api/upload-image", {
+                method: "POST",
+                body: formData,
+            });
+
+            if (!res.ok) throw new Error("アップロード失敗");
+            const data = await res.json();
+
+            // プレースホルダーを実際の画像URLに置換
+            // ファイル名がない場合は 'image' とする
+            const filename = file.name || 'image';
+            onChange(newContent.replace(placeholder, `\n![${filename}](${data.url})\n`));
+
+        } catch (error) {
+            console.error("画像アップロードエラー:", error);
+            alert("画像のアップロードに失敗しました");
+            // プレースホルダーを削除
+            onChange(newContent.replace(placeholder, ""));
+        } finally {
+            setIsUploading(false);
+        }
+    };
+
     return (
         <div
             style={{
@@ -393,7 +439,8 @@ export default function TextEditor({ content, onChange }: TextEditorProps) {
                         onKeyDown={handleKeyDown}
                         onDragOver={(e) => e.preventDefault()}
                         onDrop={handleDrop}
-                        placeholder={"ここにノートを入力してください...\n (画像をドラッグ＆ドロップで挿入できます)\n\nMarkdown記法が使用できます。\n# 見出し\n- リスト\n**太字**"}
+                        onPaste={handlePaste}
+                        placeholder={"ここにノートを入力してください...\n (画像をドラッグ＆ドロップまたはペーストで挿入できます)\n\nMarkdown記法が使用できます。\n# 見出し\n- リスト\n**太字**"}
                         style={{ flex: 1, padding: "16px", resize: "none", opacity: isUploading ? 0.7 : 1 }}
                         disabled={isUploading}
                     />
