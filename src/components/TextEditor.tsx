@@ -3,16 +3,34 @@
 import { useState, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import rehypeRaw from "rehype-raw";
 
 interface TextEditorProps {
     content: string;
     onChange: (content: string) => void;
 }
 
+// よく使う文字色パレット
+const COLOR_PALETTE = [
+    { color: "#ef4444", label: "赤" },
+    { color: "#f97316", label: "オレンジ" },
+    { color: "#eab308", label: "黄" },
+    { color: "#22c55e", label: "緑" },
+    { color: "#3b82f6", label: "青" },
+    { color: "#8b5cf6", label: "紫" },
+    { color: "#ec4899", label: "ピンク" },
+    { color: "#06b6d4", label: "水色" },
+    { color: "#64748b", label: "グレー" },
+    { color: "#ffffff", label: "白", border: true },
+];
+
 export default function TextEditor({ content, onChange }: TextEditorProps) {
     const [showPreview, setShowPreview] = useState(false);
+    const [showColorPicker, setShowColorPicker] = useState(false);
+    const [customColor, setCustomColor] = useState("#ff6b6b");
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const [isUploading, setIsUploading] = useState(false);
+    const colorPickerRef = useRef<HTMLDivElement>(null);
 
     // テキストエリアに文字列を挿入してカーソルを合わせる補助関数
     const insertText = (before: string, after: string = "") => {
@@ -30,6 +48,43 @@ export default function TextEditor({ content, onChange }: TextEditorProps) {
         setTimeout(() => {
             textarea.focus();
             textarea.setSelectionRange(start + before.length, end + before.length);
+        }, 0);
+    };
+
+    // 指定した色でspanタグを挿入
+    const applyColor = (color: string) => {
+        const textarea = textareaRef.current;
+        if (!textarea) return;
+
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const selected = content.substring(start, end);
+
+        let newText: string;
+        let cursorStart: number;
+        let cursorEnd: number;
+
+        if (selected) {
+            // 選択テキストをspanで囲む
+            const before = `<span style="color:${color}">`;
+            const after = "</span>";
+            newText = content.substring(0, start) + before + selected + after + content.substring(end);
+            cursorStart = start + before.length;
+            cursorEnd = cursorStart + selected.length;
+        } else {
+            // 選択なし: カーソル位置にspanを挿入（テキスト入力待ち）
+            const tag = `<span style="color:${color}"></span>`;
+            newText = content.substring(0, start) + tag + content.substring(end);
+            cursorStart = start + `<span style="color:${color}">`.length;
+            cursorEnd = cursorStart;
+        }
+
+        onChange(newText);
+        setShowColorPicker(false);
+
+        setTimeout(() => {
+            textarea.focus();
+            textarea.setSelectionRange(cursorStart, cursorEnd);
         }, 0);
     };
 
@@ -118,7 +173,7 @@ export default function TextEditor({ content, onChange }: TextEditorProps) {
                     justifyContent: "space-between",
                 }}
             >
-                <div style={{ display: "flex", gap: "4px" }}>
+                <div style={{ display: "flex", gap: "4px", alignItems: "center", flexWrap: "wrap" }}>
                     <button
                         className="btn-icon"
                         title="見出し"
@@ -180,6 +235,129 @@ export default function TextEditor({ content, onChange }: TextEditorProps) {
                     >
                         {"</>"}
                     </button>
+
+                    {/* 区切り */}
+                    <div style={{ width: "1px", height: "24px", background: "var(--border-color)", margin: "0 2px" }} />
+
+                    {/* 文字色ボタン */}
+                    <div style={{ position: "relative" }} ref={colorPickerRef}>
+                        <button
+                            className="btn-icon"
+                            title="文字色"
+                            style={{
+                                width: "36px",
+                                height: "36px",
+                                fontSize: "14px",
+                                fontWeight: 700,
+                                position: "relative",
+                                overflow: "hidden",
+                            }}
+                            onClick={() => setShowColorPicker(!showColorPicker)}
+                        >
+                            <span style={{ color: customColor }}>A</span>
+                            {/* 色インジケーターバー */}
+                            <span style={{
+                                position: "absolute",
+                                bottom: "3px",
+                                left: "6px",
+                                right: "6px",
+                                height: "3px",
+                                borderRadius: "2px",
+                                background: customColor,
+                            }} />
+                        </button>
+
+                        {/* カラーパレットポップアップ */}
+                        {showColorPicker && (
+                            <div
+                                style={{
+                                    position: "absolute",
+                                    top: "calc(100% + 6px)",
+                                    left: 0,
+                                    zIndex: 200,
+                                    background: "var(--bg-primary)",
+                                    border: "1px solid var(--border-color)",
+                                    borderRadius: "10px",
+                                    padding: "10px",
+                                    boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
+                                    width: "200px",
+                                    animation: "fadeIn 0.15s ease",
+                                }}
+                            >
+                                <p style={{ fontSize: "10px", color: "var(--text-muted)", marginBottom: "8px" }}>
+                                    文字色を選択（選択テキストに適用）
+                                </p>
+
+                                {/* パレット */}
+                                <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "10px" }}>
+                                    {COLOR_PALETTE.map(({ color, label, border }) => (
+                                        <button
+                                            key={color}
+                                            title={label}
+                                            onClick={() => {
+                                                setCustomColor(color);
+                                                applyColor(color);
+                                            }}
+                                            style={{
+                                                width: "24px",
+                                                height: "24px",
+                                                borderRadius: "50%",
+                                                background: color,
+                                                border: border ? "1px solid var(--border-color)" : (customColor === color ? "2px solid var(--accent-primary)" : "2px solid transparent"),
+                                                cursor: "pointer",
+                                                transition: "transform 0.1s",
+                                            }}
+                                        />
+                                    ))}
+                                </div>
+
+                                {/* カスタムカラーピッカー */}
+                                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                    <label style={{ fontSize: "10px", color: "var(--text-muted)", whiteSpace: "nowrap" }}>
+                                        カスタム:
+                                    </label>
+                                    <input
+                                        type="color"
+                                        value={customColor}
+                                        onChange={(e) => setCustomColor(e.target.value)}
+                                        style={{
+                                            width: "36px",
+                                            height: "28px",
+                                            border: "1px solid var(--border-color)",
+                                            borderRadius: "4px",
+                                            cursor: "pointer",
+                                            background: "none",
+                                            padding: "2px",
+                                        }}
+                                    />
+                                    <button
+                                        className="btn-primary"
+                                        onClick={() => applyColor(customColor)}
+                                        style={{ flex: 1, fontSize: "11px", padding: "4px 8px" }}
+                                    >
+                                        適用
+                                    </button>
+                                </div>
+
+                                {/* 閉じるボタン */}
+                                <button
+                                    onClick={() => setShowColorPicker(false)}
+                                    style={{
+                                        position: "absolute",
+                                        top: "6px",
+                                        right: "8px",
+                                        background: "none",
+                                        border: "none",
+                                        cursor: "pointer",
+                                        color: "var(--text-muted)",
+                                        fontSize: "12px",
+                                    }}
+                                >
+                                    ✕
+                                </button>
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 {/* プレビュー切り替え */}
@@ -215,7 +393,7 @@ export default function TextEditor({ content, onChange }: TextEditorProps) {
                         onKeyDown={handleKeyDown}
                         onDragOver={(e) => e.preventDefault()}
                         onDrop={handleDrop}
-                        placeholder="ここにノートを入力してください...&#10; (画像をドラッグ＆ドロップで挿入できます)&#10;&#10;Markdown記法が使用できます。&#10;# 見出し&#10;- リスト&#10;**太字**"
+                        placeholder={"ここにノートを入力してください...\n (画像をドラッグ＆ドロップで挿入できます)\n\nMarkdown記法が使用できます。\n# 見出し\n- リスト\n**太字**"}
                         style={{ flex: 1, padding: "16px", resize: "none", opacity: isUploading ? 0.7 : 1 }}
                         disabled={isUploading}
                     />
@@ -225,7 +403,10 @@ export default function TextEditor({ content, onChange }: TextEditorProps) {
                 {showPreview && (
                     <div style={{ flex: 1, overflow: "auto", padding: "16px" }} className="markdown-preview">
                         {content ? (
-                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                            <ReactMarkdown
+                                remarkPlugins={[remarkGfm]}
+                                rehypePlugins={[rehypeRaw]}
+                            >
                                 {content}
                             </ReactMarkdown>
                         ) : (
@@ -237,7 +418,7 @@ export default function TextEditor({ content, onChange }: TextEditorProps) {
                 )}
             </div>
 
-            {/* Markdown固有のスタイル (グローバルCSSで定義する方がベターですがコンポーネント内に閉じ込めるため) */}
+            {/* Markdown固有のスタイル */}
             <style jsx global>{`
                 .markdown-preview {
                     color: var(--text-primary);
