@@ -413,53 +413,49 @@ export default function TextEditor({ content, onChange, folderId }: TextEditorPr
                     </div>
                 </div>
 
-                {/* プレビュー切り替え */}
-                {/* プレビュー切り替え */}
-                <div style={{ display: "flex", backgroundColor: "var(--bg-primary)", borderRadius: "8px", border: "1px solid var(--border-color)", overflow: "hidden" }}>
-                    <button
-                        className={`btn-icon ${viewMode === 'edit' ? 'active' : ''}`}
-                        onClick={() => setViewMode('edit')}
-                        style={{
-                            padding: "6px 12px",
-                            fontSize: "13px",
-                            borderRadius: 0,
-                            background: viewMode === 'edit' ? "var(--accent-primary)" : "transparent",
-                            color: viewMode === 'edit' ? "white" : "var(--text-muted)",
-                            whiteSpace: "nowrap",
-                        }}
-                    >
-                        編集
-                    </button>
-                    <button
-                        className={`btn-icon ${viewMode === 'preview' ? 'active' : ''}`}
-                        onClick={() => setViewMode('preview')}
-                        style={{
-                            padding: "6px 12px",
-                            fontSize: "13px",
-                            borderRadius: 0,
-                            borderLeft: "1px solid var(--border-color)",
-                            borderRight: "1px solid var(--border-color)",
-                            background: viewMode === 'preview' ? "var(--accent-primary)" : "transparent",
-                            color: viewMode === 'preview' ? "white" : "var(--text-muted)",
-                            whiteSpace: "nowrap",
-                        }}
-                    >
-                        プレビュー
-                    </button>
-                    <button
-                        className={`btn-icon ${viewMode === 'split' ? 'active' : ''}`}
-                        onClick={() => setViewMode('split')}
-                        style={{
-                            padding: "6px 12px",
-                            fontSize: "13px",
-                            borderRadius: 0,
-                            background: viewMode === 'split' ? "var(--accent-primary)" : "transparent",
-                            color: viewMode === 'split' ? "white" : "var(--text-muted)",
-                            whiteSpace: "nowrap",
-                        }}
-                    >
-                        分割
-                    </button>
+                {/* ビューモード切り替え */}
+                <div style={{
+                    display: "flex",
+                    backgroundColor: "var(--bg-secondary)",
+                    borderRadius: "10px",
+                    padding: "3px",
+                    gap: "2px",
+                }}>
+                    {([
+                        { mode: "edit", icon: "✏️", label: "編集" },
+                        { mode: "preview", icon: "👁", label: "プレビュー" },
+                        { mode: "split", icon: "⬛⬜", label: "分割" },
+                    ] as const).map(({ mode, icon, label }) => (
+                        <button
+                            key={mode}
+                            onClick={() => setViewMode(mode)}
+                            style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "5px",
+                                padding: "5px 10px",
+                                fontSize: "12px",
+                                fontWeight: viewMode === mode ? 600 : 400,
+                                borderRadius: "7px",
+                                border: "none",
+                                cursor: "pointer",
+                                whiteSpace: "nowrap",
+                                transition: "all 0.15s ease",
+                                background: viewMode === mode
+                                    ? "var(--bg-primary)"
+                                    : "transparent",
+                                color: viewMode === mode
+                                    ? "var(--accent-primary)"
+                                    : "var(--text-muted)",
+                                boxShadow: viewMode === mode
+                                    ? "0 1px 4px rgba(0,0,0,0.15)"
+                                    : "none",
+                            }}
+                        >
+                            <span style={{ fontSize: "13px", lineHeight: 1 }}>{icon}</span>
+                            {label}
+                        </button>
+                    ))}
                 </div>
             </div>
 
