@@ -25,7 +25,7 @@ const COLOR_PALETTE = [
 ];
 
 export default function TextEditor({ content, onChange }: TextEditorProps) {
-    const [showPreview, setShowPreview] = useState(false);
+    const [viewMode, setViewMode] = useState<"edit" | "preview" | "split">("edit");
     const [showColorPicker, setShowColorPicker] = useState(false);
     const [customColor, setCustomColor] = useState("#ff6b6b");
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -407,48 +407,82 @@ export default function TextEditor({ content, onChange }: TextEditorProps) {
                 </div>
 
                 {/* プレビュー切り替え */}
-                <button
-                    className={`btn-secondary ${showPreview ? 'active' : ''}`}
-                    onClick={() => setShowPreview(!showPreview)}
-                    style={{
-                        padding: "6px 12px",
-                        fontSize: "12px",
-                        background: showPreview ? "var(--accent-primary)" : "",
-                        color: showPreview ? "white" : "",
-                        border: showPreview ? "none" : "",
-                    }}
-                >
-                    {showPreview ? "👁️ プレビュー分割" : "👁️ プレビュー表示"}
-                </button>
+                {/* プレビュー切り替え */}
+                <div style={{ display: "flex", backgroundColor: "var(--bg-primary)", borderRadius: "8px", border: "1px solid var(--border-color)", overflow: "hidden" }}>
+                    <button
+                        className={`btn-icon ${viewMode === 'edit' ? 'active' : ''}`}
+                        onClick={() => setViewMode('edit')}
+                        style={{
+                            padding: "6px 10px",
+                            fontSize: "12px",
+                            borderRadius: 0,
+                            background: viewMode === 'edit' ? "var(--accent-primary)" : "transparent",
+                            color: viewMode === 'edit' ? "white" : "var(--text-muted)",
+                        }}
+                    >
+                        編集
+                    </button>
+                    <button
+                        className={`btn-icon ${viewMode === 'preview' ? 'active' : ''}`}
+                        onClick={() => setViewMode('preview')}
+                        style={{
+                            padding: "6px 10px",
+                            fontSize: "12px",
+                            borderRadius: 0,
+                            borderLeft: "1px solid var(--border-color)",
+                            borderRight: "1px solid var(--border-color)",
+                            background: viewMode === 'preview' ? "var(--accent-primary)" : "transparent",
+                            color: viewMode === 'preview' ? "white" : "var(--text-muted)",
+                        }}
+                    >
+                        プレビュー
+                    </button>
+                    <button
+                        className={`btn-icon ${viewMode === 'split' ? 'active' : ''}`}
+                        onClick={() => setViewMode('split')}
+                        style={{
+                            padding: "6px 10px",
+                            fontSize: "12px",
+                            borderRadius: 0,
+                            background: viewMode === 'split' ? "var(--accent-primary)" : "transparent",
+                            color: viewMode === 'split' ? "white" : "var(--text-muted)",
+                        }}
+                    >
+                        分割
+                    </button>
+                </div>
             </div>
 
             {/* エディタ本体レイアウト */}
-            <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
+            <div style={{ display: "flex", flex: 1, overflow: "hidden", flexDirection: viewMode === "split" ? "row" : "column" }}>
                 {/* 編集エリア */}
-                <div style={{
-                    flex: 1,
-                    display: "flex",
-                    flexDirection: "column",
-                    borderRight: showPreview ? "1px solid var(--border-color)" : "none"
-                }}>
-                    <textarea
-                        ref={textareaRef}
-                        className="editor-textarea"
-                        value={content}
-                        onChange={(e) => onChange(e.target.value)}
-                        onKeyDown={handleKeyDown}
-                        onDragOver={(e) => e.preventDefault()}
-                        onDrop={handleDrop}
-                        onPaste={handlePaste}
-                        placeholder={"ここにノートを入力してください...\n (画像をドラッグ＆ドロップまたはペーストで挿入できます)\n\nMarkdown記法が使用できます。\n# 見出し\n- リスト\n**太字**"}
-                        style={{ flex: 1, padding: "16px", resize: "none", opacity: isUploading ? 0.7 : 1 }}
-                        disabled={isUploading}
-                    />
-                </div>
+                {(viewMode === "edit" || viewMode === "split") && (
+                    <div style={{
+                        flex: 1,
+                        display: "flex",
+                        flexDirection: "column",
+                        borderRight: viewMode === "split" ? "1px solid var(--border-color)" : "none",
+                        width: viewMode === "split" ? "50%" : "100%",
+                    }}>
+                        <textarea
+                            ref={textareaRef}
+                            className="editor-textarea"
+                            value={content}
+                            onChange={(e) => onChange(e.target.value)}
+                            onKeyDown={handleKeyDown}
+                            onDragOver={(e) => e.preventDefault()}
+                            onDrop={handleDrop}
+                            onPaste={handlePaste}
+                            placeholder={"ここにノートを入力してください...\n (画像をドラッグ＆ドロップまたはペーストで挿入できます)\n\nMarkdown記法が使用できます。\n# 見出し\n- リスト\n**太字**"}
+                            style={{ flex: 1, padding: "16px", resize: "none", opacity: isUploading ? 0.7 : 1 }}
+                            disabled={isUploading}
+                        />
+                    </div>
+                )}
 
                 {/* プレビューエリア */}
-                {showPreview && (
-                    <div style={{ flex: 1, overflow: "auto", padding: "16px" }} className="markdown-preview">
+                {(viewMode === "preview" || viewMode === "split") && (
+                    <div style={{ flex: 1, overflow: "auto", padding: "16px", width: viewMode === "split" ? "50%" : "100%" }} className="markdown-preview">
                         {content ? (
                             <ReactMarkdown
                                 remarkPlugins={[remarkGfm]}
@@ -486,7 +520,7 @@ export default function TextEditor({ content, onChange }: TextEditorProps) {
                 .markdown-preview p { margin-bottom: 1em; }
                 .markdown-preview ul, .markdown-preview ol { padding-left: 2em; margin-bottom: 1em; }
                 .markdown-preview li { margin-bottom: 0.25em; }
-                .markdown-preview img { max-width: 100%; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+                .markdown-preview img { max-width: 100%; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); display: block; margin: 10px 0; }
                 .markdown-preview code { background: rgba(0,0,0,0.05); padding: 0.2em 0.4em; border-radius: 3px; font-family: monospace; font-size: 0.9em; }
                 .markdown-preview pre { background: var(--bg-primary); padding: 1em; border-radius: 8px; overflow-x: auto; margin-bottom: 1em; border: 1px solid var(--border-color); }
                 .markdown-preview pre code { background: none; padding: 0; }

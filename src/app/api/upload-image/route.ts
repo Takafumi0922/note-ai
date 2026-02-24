@@ -61,13 +61,13 @@ export async function POST(request: NextRequest) {
             });
         }
 
-        // Markdownにはプレビュー用のURL (例: drive.google.com/uc?id=...) を返す
-        const directUrl = `https://drive.google.com/uc?export=view&id=${fileId}`;
+        // MarkdownにはプロキシAPIを経由するURLを返す
+        const proxyUrl = `/api/image?id=${fileId}`;
 
         return NextResponse.json({
             success: true,
             id: fileId,
-            url: directUrl
+            url: proxyUrl
         });
 
     } catch (error) {
