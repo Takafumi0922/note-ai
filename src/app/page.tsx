@@ -39,6 +39,11 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
+    if (session?.error === "RefreshAccessTokenError") {
+      // トークンリフレッシュに失敗した場合は強制再ログイン
+      signOut();
+      return;
+    }
     if (session) {
       loadNotes();
     }

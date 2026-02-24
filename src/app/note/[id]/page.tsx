@@ -1,6 +1,6 @@
 "use client";
 
-import { useSession } from "next-auth/react";
+import { useSession, signOut } from "next-auth/react";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
 import Header from "@/components/Header";
@@ -97,6 +97,10 @@ export default function NotePage() {
     }, [folderId]);
 
     useEffect(() => {
+        if (session?.error === "RefreshAccessTokenError") {
+            signOut();
+            return;
+        }
         if (session) {
             loadNote();
         }
