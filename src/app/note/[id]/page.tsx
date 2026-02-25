@@ -205,11 +205,12 @@ export default function NotePage() {
         setActiveTab("text");
     };
 
-    // ドキュメントテキストをAI要約（モーダル表示＋カスタム指示対応）
+    // ドキュメントテキストをAI要約（モーダル表示＋ストリーミング対応）
     const handleSummarizePdfText = async (text: string, customPrompt?: string) => {
         setAiModalOpen(true);
         setAiModalLoading(true);
         setAiModalResult("");
+        let accumulatedText = "";
         try {
             const res = await fetch("/api/summarize", {
                 method: "POST",
@@ -217,15 +218,31 @@ export default function NotePage() {
                 body: JSON.stringify({ text, type: "pdf", customPrompt }),
             });
             if (!res.ok) {
-                const data = await res.json();
+                // エラー時のみJSONとしてパース
+                const data = await res.json().catch(() => ({}));
                 throw new Error(data.error || "要約に失敗しました");
             }
-            const data = await res.json();
-            setAiModalResult(data.summary);
-            setSummaryText(data.summary);
+
+            if (!res.body) throw new Error("レスポンスボディがありません");
+
+            // ストリーミングで読み込む
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+
+            setAiModalLoading(false); // ストリーム開始時点でローディング解除
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                const chunk = decoder.decode(value, { stream: true });
+                accumulatedText += chunk;
+                setAiModalResult(accumulatedText);
+            }
+
+            setSummaryText(accumulatedText);
             // 履歴に追加
-            const label = customPrompt ? `資料要約+指示「${customPrompt.slice(0, 15)}」` : "📁 資料要約";
-            addAiHistory(data.summary, label);
+            const label = customPrompt ? `📁 資料要約+指示「${customPrompt.slice(0, 15)}」` : "📁 資料要約";
+            addAiHistory(accumulatedText, label);
             // AI履歴タブへ移動
             setLeftTab("summary");
         } catch (error) {
